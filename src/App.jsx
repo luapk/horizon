@@ -568,6 +568,13 @@ export default function HorizonApp() {
 
   useEffect(() => { setLoaded(true); }, []);
 
+  const filteredSignals = useMemo(() => {
+    if (signalFilter === "All") return SIGNALS;
+    if (signalFilter === "Absence") return SIGNALS.filter(s => s.type === "Absence");
+    if (signalFilter === "Counter") return SIGNALS.filter(s => s.type === "Counter-Signal");
+    return SIGNALS.filter(s => s.category === signalFilter);
+  }, [signalFilter]);
+
   const handleLogin = () => {
     if (password === "mars2036") {
       setAuthenticated(true);
@@ -620,13 +627,6 @@ export default function HorizonApp() {
       </div>
     );
   }
-
-  const filteredSignals = useMemo(() => {
-    if (signalFilter === "All") return SIGNALS;
-    if (signalFilter === "Absence") return SIGNALS.filter(s => s.type === "Absence");
-    if (signalFilter === "Counter") return SIGNALS.filter(s => s.type === "Counter-Signal");
-    return SIGNALS.filter(s => s.category === signalFilter);
-  }, [signalFilter]);
 
   return (
     <div style={{ minHeight: "100vh", background: T.bgAbyss, color: T.textPrimary, fontFamily: "'DM Sans', system-ui, sans-serif" }}>
