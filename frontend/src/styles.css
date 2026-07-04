@@ -1,0 +1,42 @@
+/* Horizon Engine global layer: reset, motion, chrome.
+   Component styling stays inline against theme.ts tokens;
+   this file owns what inline styles can't reach. */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #060a12;
+  color: #e8ecf1;
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: rgba(212, 168, 83, 0.28); }
+
+/* thin, quiet scrollbars */
+* { scrollbar-width: thin; scrollbar-color: #243044 transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #243044; border-radius: 3px; }
+
+input, textarea, select, button { font-family: inherit; }
+
+input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible {
+  outline: 1px solid rgba(212, 168, 83, 0.6);
+  outline-offset: 1px;
+}
+
+/* range inputs carry the accent */
+input[type="range"] { accent-color: #d4a853; height: 20px; }
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+@keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

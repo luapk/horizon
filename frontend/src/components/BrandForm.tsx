@@ -1,19 +1,17 @@
 import { useState } from "react";
 import type { BrandConfig } from "@horizon/shared";
-import { T } from "../theme.js";
+import { T, FONT, card, eyebrow, inputStyle, goldButton } from "../theme.js";
 import { api } from "../api.js";
 
-const inputStyle: React.CSSProperties = {
-  background: T.bgCard,
-  border: `1px solid ${T.glassBorder}`,
-  borderRadius: 4,
-  padding: "10px 12px",
-  color: T.textPrimary,
-  fontSize: 13,
-  width: "100%",
-};
-
-const labelStyle: React.CSSProperties = { fontSize: 11, color: T.textSecondary, marginBottom: 6, display: "block" };
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{ ...eyebrow(T.textSecondary), display: "block", marginBottom: 7 }}>{label}</label>
+      {children}
+      {hint && <div style={{ fontSize: 10.5, color: T.textMuted, marginTop: 5, lineHeight: 1.5 }}>{hint}</div>}
+    </div>
+  );
+}
 
 export function BrandForm({ onCreated }: { onCreated: (brand: BrandConfig) => void }) {
   const [name, setName] = useState("");
@@ -26,18 +24,18 @@ export function BrandForm({ onCreated }: { onCreated: (brand: BrandConfig) => vo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const split = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
+
   const submit = async () => {
     setBusy(true);
     setError(null);
     try {
       const brand = await api.createBrand({
-        name,
-        industry,
-        description,
-        businessUnits: businessUnits.split(",").map((s) => s.trim()).filter(Boolean),
-        competitors: competitors.split(",").map((s) => s.trim()).filter(Boolean),
-        geographies: geographies.split(",").map((s) => s.trim()).filter(Boolean),
-        curatedSources: curatedSources.split(",").map((s) => s.trim()).filter(Boolean),
+        name, industry, description,
+        businessUnits: split(businessUnits),
+        competitors: split(competitors),
+        geographies: split(geographies),
+        curatedSources: split(curatedSources),
       });
       onCreated(brand);
     } catch (e) {
@@ -48,44 +46,45 @@ export function BrandForm({ onCreated }: { onCreated: (brand: BrandConfig) => vo
   };
 
   return (
-    <div style={{ maxWidth: 560, background: T.bgCard, border: `1px solid ${T.glassBorder}`, borderRadius: 6, padding: 32 }}>
-      <h2 style={{ color: T.textHeading, margin: "0 0 24px", fontWeight: 400 }}>New Brand Scan Target</h2>
-      <div style={{ display: "grid", gap: 16 }}>
-        <div>
-          <label style={labelStyle}>Brand name</label>
-          <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Corp" />
+    <div style={{ maxWidth: 640, margin: "0 auto", animation: "fadeUp 400ms ease" }}>
+      <div style={{ ...eyebrow(T.gold), marginBottom: 10 }}>SCAN TARGET</div>
+      <h1 style={{ fontFamily: FONT.display, fontSize: 34, fontWeight: 400, color: T.textHeading, margin: "0 0 8px" }}>New brand</h1>
+      <p style={{ fontSize: 13, color: T.textSecondary, margin: "0 0 28px", lineHeight: 1.6 }}>
+        Everything the pipeline knows about a brand comes from this configuration — queries, business
+        units in the strategy matrix, and which sources count as trusted.
+      </p>
+
+      <div style={{ ...card, padding: 32, display: "grid", gap: 22 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+          <Field label="Brand name">
+            <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Corp" />
+          </Field>
+          <Field label="Industry">
+            <input style={inputStyle} value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="pet care, aerospace, fintech…" />
+          </Field>
         </div>
-        <div>
-          <label style={labelStyle}>Industry</label>
-          <input style={inputStyle} value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="pet care, aerospace, fintech..." />
-        </div>
-        <div>
-          <label style={labelStyle}>Description</label>
-          <textarea style={{ ...inputStyle, minHeight: 60 }} value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
-        <div>
-          <label style={labelStyle}>Business units (comma-separated -- becomes the strategic matrix rows)</label>
+        <Field label="Description">
+          <textarea style={{ ...inputStyle, minHeight: 64, resize: "vertical" }} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="One or two sentences on what the brand does and where it plays." />
+        </Field>
+        <Field label="Business units" hint="Comma-separated — these become the rows of the strategic impact matrix.">
           <input style={inputStyle} value={businessUnits} onChange={(e) => setBusinessUnits(e.target.value)} placeholder="Nutrition, Diagnostics, Insurance" />
+        </Field>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+          <Field label="Competitors" hint="Comma-separated.">
+            <input style={inputStyle} value={competitors} onChange={(e) => setCompetitors(e.target.value)} placeholder="Rival Inc, OtherCo" />
+          </Field>
+          <Field label="Geographies" hint="Comma-separated — plotted on the signal globe.">
+            <input style={inputStyle} value={geographies} onChange={(e) => setGeographies(e.target.value)} placeholder="US, EU, Japan, South Korea" />
+          </Field>
         </div>
-        <div>
-          <label style={labelStyle}>Competitors (comma-separated)</label>
-          <input style={inputStyle} value={competitors} onChange={(e) => setCompetitors(e.target.value)} placeholder="Rival Inc, OtherCo" />
-        </div>
-        <div>
-          <label style={labelStyle}>Geographies (comma-separated)</label>
-          <input style={inputStyle} value={geographies} onChange={(e) => setGeographies(e.target.value)} placeholder="US, EU, South Korea" />
-        </div>
-        <div>
-          <label style={labelStyle}>Curated source domains (comma-separated, optional -- trade press, regulators, journals; most searches are restricted to these, with a smaller open-web sweep for surprises)</label>
+        <Field label="Curated source domains" hint="Optional. Trade press, regulators, journals. Most queries are restricted to these; a smaller open-web sweep still runs for surprises.">
           <input style={inputStyle} value={curatedSources} onChange={(e) => setCuratedSources(e.target.value)} placeholder="petfoodindustry.com, fda.gov, nature.com" />
-        </div>
-        {error && <div style={{ color: T.red, fontSize: 12 }}>{error}</div>}
-        <button
-          onClick={submit}
-          disabled={busy || !name || !industry}
-          style={{ background: T.gold + "20", border: `1px solid ${T.gold}40`, borderRadius: 4, padding: "10px 16px", color: T.gold, cursor: "pointer" }}
-        >
-          {busy ? "Creating..." : "Create brand"}
+        </Field>
+
+        {error && <div style={{ color: T.red, fontSize: 12, lineHeight: 1.5 }}>{error}</div>}
+
+        <button onClick={submit} disabled={busy || !name || !industry} style={{ ...goldButton, opacity: busy || !name || !industry ? 0.45 : 1, justifySelf: "start" }}>
+          {busy ? "CREATING…" : "CREATE BRAND"}
         </button>
       </div>
     </div>
