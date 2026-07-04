@@ -2,6 +2,15 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { router } from "./routes.js";
+import { listScans, saveScan } from "./db.js";
+
+// Scans run in-process; anything still pending/running at boot was orphaned
+// by a restart and would otherwise show "running" forever.
+for (const scan of listScans()) {
+  if (scan.status === "pending" || scan.status === "running") {
+    saveScan({ ...scan, status: "failed", error: "interrupted by server restart" });
+  }
+}
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 8787);

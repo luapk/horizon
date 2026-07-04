@@ -89,15 +89,33 @@ export function ScanResults({ scanId }: { scanId: string }) {
 
       {view === "Signals" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-          {scan.signals.map((s) => (
-            <div key={s.id} style={{ background: T.bgCard, border: `1px solid ${T.glassBorder}`, borderLeft: `3px solid ${STEEP_COLORS[s.category] ?? T.textMuted}`, borderRadius: 6, padding: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T.textMuted, fontFamily: "monospace", marginBottom: 6 }}>
-                <span>{s.id}</span><span>{s.category} · {s.confidence}</span>
+          {scan.signals.map((s) => {
+            const isAbsence = s.type === "Absence";
+            const isCounter = s.type === "Counter-Signal";
+            return (
+              <div key={s.id} style={{
+                background: T.bgCard,
+                border: `1px solid ${isAbsence ? T.amber + "40" : isCounter ? T.red + "40" : T.glassBorder}`,
+                borderStyle: isAbsence || isCounter ? "dashed" : "solid",
+                borderLeft: `3px ${isAbsence || isCounter ? "dashed" : "solid"} ${isAbsence ? T.amber : isCounter ? T.red : STEEP_COLORS[s.category] ?? T.textMuted}`,
+                borderRadius: 6, padding: 14,
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T.textMuted, fontFamily: "monospace", marginBottom: 6 }}>
+                  <span>{s.id} · {s.geo}</span>
+                  <span style={{ color: isAbsence ? T.amber : isCounter ? T.red : T.textMuted }}>
+                    {isAbsence ? "ABSENCE" : isCounter ? "COUNTER" : s.category} · {s.confidence}
+                  </span>
+                </div>
+                <h4 style={{ fontSize: 14, color: T.textHeading, margin: "0 0 6px" }}>{s.title}</h4>
+                <p style={{ fontSize: 12, color: T.textSecondary, margin: "0 0 8px" }}>{s.summary}</p>
+                {s.url ? (
+                  <a href={s.url} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: T.blue, textDecoration: "none" }}>source ↗</a>
+                ) : (
+                  <span style={{ fontSize: 10, color: T.textMuted }}>{s.source}</span>
+                )}
               </div>
-              <h4 style={{ fontSize: 14, color: T.textHeading, margin: "0 0 6px" }}>{s.title}</h4>
-              <p style={{ fontSize: 12, color: T.textSecondary, margin: 0 }}>{s.summary}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -131,13 +149,45 @@ export function ScanResults({ scanId }: { scanId: string }) {
           {selectedScenario != null && (() => {
             const s = scan.scenarios.find((x) => x.id === selectedScenario);
             if (!s) return null;
+            const evidence = s.citedSignalIds
+              .map((id) => scan.signals.find((sig) => sig.id === id))
+              .filter((sig): sig is NonNullable<typeof sig> => !!sig);
             return (
               <div style={{ marginTop: 24, background: T.bgCard, border: `1px solid ${T.glassBorder}`, borderRadius: 8, padding: 32 }}>
                 <button onClick={() => setSelectedScenario(null)} style={{ float: "right", background: "none", border: "none", color: T.textMuted, cursor: "pointer" }}>×</button>
+                <div style={{ fontSize: 11, fontFamily: "monospace", color: TIER_COLORS[s.tier], marginBottom: 4 }}>
+                  {s.tier.toUpperCase()} · confidence: {s.confidence}
+                  {evidence.length === 0 && <span style={{ color: T.red }}> · UNGROUNDED -- no evidence citations</span>}
+                </div>
                 <h2 style={{ color: T.textHeading, fontWeight: 400 }}>{s.title}</h2>
                 <p style={{ whiteSpace: "pre-wrap", color: T.textPrimary, lineHeight: 1.7, fontSize: 14 }}>{s.dispatch}</p>
                 <div style={{ marginTop: 16, fontSize: 13, color: T.amber }}><strong>Shadow:</strong> {s.shadow}</div>
                 <div style={{ marginTop: 8, fontSize: 13, color: T.red }}><strong>Killer assumption:</strong> {s.killerAssumption}</div>
+                {evidence.length > 0 && (
+                  <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${T.glassBorder}` }}>
+                    <div style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: 2, color: T.textMuted, marginBottom: 10 }}>EVIDENCE CITED</div>
+                    <div style={{ display: "grid", gap: 6 }}>
+                      {evidence.map((sig) => (
+                        <div key={sig.id} style={{ fontSize: 12, color: T.textSecondary }}>
+                          <span style={{ fontFamily: "monospace", color: T.gold }}>{sig.id}</span>{" "}
+                          {sig.url ? <a href={sig.url} target="_blank" rel="noreferrer" style={{ color: T.textPrimary, textDecoration: "none" }}>{sig.title} ↗</a> : sig.title}
+                          <span style={{ color: T.textMuted }}> · {sig.confidence}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {s.actions.length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: 2, color: T.textMuted, marginBottom: 10 }}>RECOMMENDED ACTIONS</div>
+                    {s.actions.map((a, i) => (
+                      <div key={i} style={{ fontSize: 12, color: T.textSecondary, marginBottom: 4 }}>
+                        <span style={{ fontFamily: "monospace", fontSize: 10, color: a.lane === "now" ? T.green : a.lane === "monitor" ? T.amber : T.violet, textTransform: "uppercase" }}>{a.lane}</span>{" "}
+                        {a.label}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })()}

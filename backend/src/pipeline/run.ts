@@ -3,6 +3,7 @@ import { UsageTracker, type Providers } from "../providers/index.js";
 import { runIngest } from "./ingest.js";
 import { runExtract } from "./extract.js";
 import { dedupeSignals, clusterSignals } from "./cluster.js";
+import { runGapAnalysis } from "./gaps.js";
 import { synthesizeDrivers } from "./drivers.js";
 import { generateScenarios } from "./scenarios.js";
 import { buildMatrix } from "./matrix.js";
@@ -26,13 +27,19 @@ export async function runScan(
     onProgress("ingest", "done", `${docs.length} documents retrieved`);
 
     onProgress("extract", "in_progress");
-    const rawSignals = await runExtract(docs, brand, providers, usage);
-    onProgress("extract", "done", `${rawSignals.length} signals extracted`);
+    const { signals: rawSignals, failedDocs } = await runExtract(docs, brand, providers, usage);
+    onProgress("extract", "done", `${rawSignals.length} signals extracted${failedDocs > 0 ? `, ${failedDocs} docs failed and were skipped` : ""}`);
 
     onProgress("dedupe_cluster", "in_progress");
-    const signals = await dedupeSignals(rawSignals, providers, usage);
+    const dedupedSignals = await dedupeSignals(rawSignals, providers, usage);
+    onProgress("dedupe_cluster", "done", `${rawSignals.length - dedupedSignals.length} duplicates removed`);
+
+    onProgress("gap_analysis", "in_progress");
+    const gapSignals = await runGapAnalysis(brand, dedupedSignals, providers, usage);
+    const signals = [...dedupedSignals, ...gapSignals];
+    onProgress("gap_analysis", "done", `${gapSignals.filter((s) => s.type === "Absence").length} absence + ${gapSignals.filter((s) => s.type === "Counter-Signal").length} counter-signals derived`);
+
     const { clusters } = await clusterSignals(signals, scope.driverCount, providers, usage);
-    onProgress("dedupe_cluster", "done", `${rawSignals.length - signals.length} duplicates removed, ${clusters.length} clusters proposed`);
 
     onProgress("cluster_name", "in_progress");
     const drivers = await synthesizeDrivers(clusters, signals, providers, usage);
@@ -40,7 +47,7 @@ export async function runScan(
     onProgress("driver_synthesis", "done", `${drivers.length} drivers synthesized`);
 
     onProgress("scenario_generation", "in_progress");
-    const scenarios = await generateScenarios(brand, drivers, scope.scenarioCount, providers, usage);
+    const scenarios = await generateScenarios(brand, drivers, signals, scope.scenarioCount, providers, usage);
     onProgress("scenario_generation", "done", `${scenarios.length} scenarios generated`);
 
     let matrix: Awaited<ReturnType<typeof buildMatrix>> = [];

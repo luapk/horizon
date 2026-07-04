@@ -28,6 +28,7 @@ export function ScanLauncher({ brands, onScanStarted }: { brands: BrandConfig[];
   const [scope, setScope] = useState<ScanScope>(DEFAULT_SCOPE);
   const [estimate, setEstimate] = useState<CostEstimate | null>(null);
   const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -39,9 +40,12 @@ export function ScanLauncher({ brands, onScanStarted }: { brands: BrandConfig[];
   const start = async () => {
     if (!brandId) return;
     setStarting(true);
+    setStartError(null);
     try {
       const scan = await api.startScan(brandId, scope);
       onScanStarted(scan.id);
+    } catch (e) {
+      setStartError(e instanceof Error ? e.message : String(e));
     } finally {
       setStarting(false);
     }
@@ -74,6 +78,7 @@ export function ScanLauncher({ brands, onScanStarted }: { brands: BrandConfig[];
         >
           {starting ? "Starting..." : "Run scan"}
         </button>
+        {startError && <div style={{ marginTop: 12, fontSize: 12, color: T.red, lineHeight: 1.5 }}>{startError}</div>}
       </div>
 
       <div style={{ background: T.bgCard, border: `1px solid ${T.glassBorder}`, borderRadius: 6, padding: 24, height: "fit-content" }}>

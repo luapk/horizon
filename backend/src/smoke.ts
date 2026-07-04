@@ -13,6 +13,7 @@ const brand: BrandConfig = {
   businessUnits: ["Widgets", "Gadgets"],
   competitors: ["Beta Corp"],
   geographies: ["US"],
+  curatedSources: ["example-trade-journal.com"],
   createdAt: new Date().toISOString(),
 };
 

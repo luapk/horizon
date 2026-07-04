@@ -47,9 +47,20 @@ its 123-signal count didn't reconcile against the ~107 actually-distinct
 signal objects in the data (dozens were near-duplicate rewordings). This
 version:
 
+- **Designs queries, then searches** -- template queries derived from brand
+  config are augmented by an LLM pass that proposes adjacent-field,
+  regulatory, and contrarian probes the templates can't anticipate. When a
+  brand has curated source domains, ~70% of queries are restricted to them
+  (the evidence core) and the rest sweep the open web (the surprises).
 - **Dedupes automatically** -- every extracted signal is embedded, and
   anything above a cosine-similarity threshold against an already-kept
   signal is dropped before it reaches clustering.
+- **Hunts absences and counter-signals as a corpus-level pass** -- absence
+  signals ("all the ingredients exist, nobody has combined them") and
+  counter-signals (evidence cutting against the corpus's own consensus)
+  can't come from single-document extraction by definition. A dedicated
+  LLM pass reasons over the whole deduped corpus, and its outputs are
+  marked as derived (never "Verified") with the signal IDs that imply them.
 - **Clusters from embeddings, not LLM free-association** -- clusters are
   proposed by greedy agglomerative clustering over embeddings (a stable,
   data-driven grouping), and only *named* by an LLM afterward. An LLM never
@@ -58,6 +69,36 @@ version:
   reasoning about the macro force it represents are two different LLM calls
   with two different prompts, so the "why does this matter" reasoning isn't
   contaminated by the pressure to also produce a catchy label.
+
+## Grounded scenarios
+
+Scenario generation receives the actual evidence signals behind its drivers
+(not just driver summaries) and is instructed that every concrete fact in
+the narrative must come from that evidence, cited inline like [S-004].
+Cited IDs are parsed back out of the dispatch text, validated against the
+scan's real signals, and rendered as a clickable evidence list under each
+scenario. A scenario that cites nothing is force-downgraded to "Contested"
+confidence and flagged UNGROUNDED in the UI -- the narrative doesn't get to
+borrow credibility it didn't earn. Each scenario also returns 2-3 concrete
+recommended actions, which is what the Now/Monitor/Prepare timeline is
+built from.
+
+## Robustness
+
+Extraction runs with bounded concurrency and per-document failure tolerance
+(a bad document is skipped and counted, not fatal). Every LLM-JSON call
+retries once on malformed output, with both attempts' usage billed honestly.
+Gap analysis and query design are enhancements, not dependencies -- if they
+fail, the scan continues without them. On server restart, scans orphaned
+mid-run are marked failed instead of showing "running" forever.
+
+## Spend governance (optional, for org rollout)
+
+Two env vars, both off by default: `MAX_SCAN_USD` blocks any scan whose
+high estimate exceeds it (the UI shows the reason and suggests reducing
+scope); `MONTHLY_BUDGET_USD` blocks new scans once the month's committed
+spend (actuals for finished scans, high estimates for in-flight ones) would
+exceed the budget.
 
 ## Cost estimation
 
@@ -96,13 +137,18 @@ server) against mock providers only, for a fast plumbing check.
 
 ## What's still manual / out of scope for this pass
 
-- Source selection is currently a fixed template derived from brand
-  config (industry/business-unit/competitor/geography permutations) --
-  a real deployment would want per-brand source curation (trade press,
-  regulatory feeds, patent databases) rather than generic web search.
 - Scenario prose and driver synthesis are single-shot LLM calls with no
   human-in-the-loop review gate before being persisted -- add one before
-  treating output as publishable without review.
-- Matrix and timeline stages are per-business-unit / heuristic
-  respectively; they aren't yet cross-checked against the underlying
-  signals the way drivers are.
+  treating output as publishable without review. (Citations + the
+  UNGROUNDED flag mitigate but don't replace review.)
+- Auth is a single shared password with one operator session -- fine for a
+  small trusted pilot, but org-wide rollout wants per-user accounts or SSO
+  for scan attribution and per-user cost accounting.
+- Full-article fetching: extraction currently runs on search snippets.
+  Fetching and extracting from full articles would deepen signals at
+  roughly 3-5x the extraction token cost.
+- The matrix stage scores scenarios per business unit from titles/taglines
+  only; it isn't yet cross-checked against underlying signals the way
+  drivers and scenarios are.
+- Hosting assumes a single always-on server (SQLite + in-process scans).
+  Moving to serverless would require Postgres and an external job queue.

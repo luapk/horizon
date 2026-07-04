@@ -22,6 +22,7 @@ export function BrandForm({ onCreated }: { onCreated: (brand: BrandConfig) => vo
   const [businessUnits, setBusinessUnits] = useState("");
   const [competitors, setCompetitors] = useState("");
   const [geographies, setGeographies] = useState("US");
+  const [curatedSources, setCuratedSources] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,6 +37,7 @@ export function BrandForm({ onCreated }: { onCreated: (brand: BrandConfig) => vo
         businessUnits: businessUnits.split(",").map((s) => s.trim()).filter(Boolean),
         competitors: competitors.split(",").map((s) => s.trim()).filter(Boolean),
         geographies: geographies.split(",").map((s) => s.trim()).filter(Boolean),
+        curatedSources: curatedSources.split(",").map((s) => s.trim()).filter(Boolean),
       });
       onCreated(brand);
     } catch (e) {
@@ -72,6 +74,10 @@ export function BrandForm({ onCreated }: { onCreated: (brand: BrandConfig) => vo
         <div>
           <label style={labelStyle}>Geographies (comma-separated)</label>
           <input style={inputStyle} value={geographies} onChange={(e) => setGeographies(e.target.value)} placeholder="US, EU, South Korea" />
+        </div>
+        <div>
+          <label style={labelStyle}>Curated source domains (comma-separated, optional -- trade press, regulators, journals; most searches are restricted to these, with a smaller open-web sweep for surprises)</label>
+          <input style={inputStyle} value={curatedSources} onChange={(e) => setCuratedSources(e.target.value)} placeholder="petfoodindustry.com, fda.gov, nature.com" />
         </div>
         {error && <div style={{ color: T.red, fontSize: 12 }}>{error}</div>}
         <button

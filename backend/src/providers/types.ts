@@ -5,12 +5,17 @@ export interface SearchResult {
   publishedAt?: string;
 }
 
-export interface SearchProvider {
-  readonly name: string;
-  search(query: string, maxResults: number): Promise<{ results: SearchResult[]; calls: number }>;
+export interface SearchOptions {
+  /** Restrict results to these domains (curated-source mode). */
+  includeDomains?: string[];
 }
 
-export type LlmResponseKind = "signal-extract" | "cluster-name" | "driver-synth" | "scenario-gen" | "matrix-gen" | "freeform";
+export interface SearchProvider {
+  readonly name: string;
+  search(query: string, maxResults: number, options?: SearchOptions): Promise<{ results: SearchResult[]; calls: number }>;
+}
+
+export type LlmResponseKind = "query-design" | "signal-extract" | "gap-analysis" | "cluster-name" | "driver-synth" | "scenario-gen" | "matrix-gen" | "freeform";
 
 export interface LlmCompletionRequest {
   system: string;

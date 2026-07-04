@@ -19,6 +19,10 @@ export const BrandConfig = z.object({
   businessUnits: z.array(z.string()).min(1),
   competitors: z.array(z.string()).default([]),
   geographies: z.array(z.string()).min(1),
+  /** Trusted domains (trade press, regulators, journals). When non-empty,
+   * most ingestion queries are restricted to these; a smaller open-web
+   * sweep still runs for surprises. */
+  curatedSources: z.array(z.string()).default([]),
   createdAt: z.string().datetime(),
 });
 export type BrandConfig = z.infer<typeof BrandConfig>;
@@ -82,6 +86,15 @@ export const Scenario = z.object({
   dispatch: z.string(),
   shadow: z.string(),
   killerAssumption: z.string(),
+  /** Signal IDs the dispatch actually cites -- the evidence trail. Empty
+   * means the narrative is ungrounded and should be treated as such. */
+  citedSignalIds: z.array(z.string()).default([]),
+  /** Concrete recommended actions; these feed the timeline instead of
+   * repeating the scenario title. */
+  actions: z.array(z.object({
+    label: z.string(),
+    lane: z.enum(["now", "monitor", "prepare"]),
+  })).default([]),
   dimensions: z.object({
     discoverability: z.number().min(0).max(100),
     appeal: z.number().min(0).max(100),
@@ -114,7 +127,7 @@ export type TimelineItem = z.infer<typeof TimelineItem>;
 
 /** Per-call usage a provider reports back, used to build the actual-cost total. */
 export const UsageEvent = z.object({
-  stage: z.enum(["ingest", "extract", "dedupe_cluster", "cluster_name", "driver_synthesis", "scenario_generation", "matrix_timeline"]),
+  stage: z.enum(["query_design", "ingest", "extract", "dedupe_cluster", "gap_analysis", "cluster_name", "driver_synthesis", "scenario_generation", "matrix_timeline"]),
   provider: z.enum(["search", "llm", "embedding"]),
   model: z.string().optional(),
   inputTokens: z.number().int().min(0).default(0),

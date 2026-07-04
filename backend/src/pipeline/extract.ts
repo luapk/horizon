@@ -1,42 +1,57 @@
 import { DEFAULT_EXTRACTION_MODEL, type Signal, type BrandConfig } from "@horizon/shared";
-import { extractJson, type Providers, type UsageTracker } from "../providers/index.js";
+import { completeJson, mapWithConcurrency, type Providers, type UsageTracker } from "../providers/index.js";
 import type { RawDoc } from "./ingest.js";
 
-const SYSTEM = `You are a horizon-scanning analyst. Given a single source document, extract one strategic signal as JSON only -- no prose, no markdown fences.
-Schema: {"title": string, "summary": string (2-3 sentences), "soWhat": string (one strategic implication as a question or claim), "category": "S"|"T"|"Ec"|"En"|"P", "type": "Positive"|"Negative"|"Absence"|"Counter-Signal", "confidence": "Verified"|"Probable"|"Contested", "surprise": 1|2|3}`;
+const EXTRACTION_CONCURRENCY = 5;
 
-export async function extractSignal(
-  doc: RawDoc,
+const SYSTEM = `You are a horizon-scanning analyst. Given a single source document, extract one strategic signal as JSON only -- no prose, no markdown fences.
+Schema: {"title": string, "summary": string (2-3 sentences), "soWhat": string (one strategic implication as a question or claim), "category": "S"|"T"|"Ec"|"En"|"P", "type": "Positive"|"Negative"|"Counter-Signal", "confidence": "Verified"|"Probable"|"Contested", "surprise": 1|2|3, "geo": string (the geography this signal is actually about, e.g. "US", "EU", "Japan", "South Korea"; use "Global" only if genuinely global or unclear)}
+Rules: confidence "Verified" only if the source itself is authoritative (regulator, peer-reviewed study, company primary announcement); news aggregation or analyst speculation is "Probable"; disputed or thinly-sourced claims are "Contested". Do not invent facts not present in the source.`;
+
+interface ExtractedFields {
+  title: string;
+  summary: string;
+  soWhat: string;
+  category: Signal["category"];
+  type: Signal["type"];
+  confidence: Signal["confidence"];
+  surprise: 1 | 2 | 3;
+  geo: string;
+}
+
+export interface ExtractOutcome {
+  signals: Signal[];
+  failedDocs: number;
+}
+
+export async function runExtract(
+  docs: RawDoc[],
   brand: BrandConfig,
-  idIndex: number,
   providers: Providers,
   usage: UsageTracker
-): Promise<Signal> {
-  const prompt = `Brand context: ${brand.name} (${brand.industry}).\nSource title: ${doc.title}\nSource URL: ${doc.url}\nSource content: ${doc.snippet}`;
-  const result = await providers.llm.complete({
-    system: SYSTEM,
-    prompt,
-    maxTokens: 500,
-    model: DEFAULT_EXTRACTION_MODEL,
-    kind: "signal-extract",
+): Promise<ExtractOutcome> {
+  const { results, failures } = await mapWithConcurrency(docs, EXTRACTION_CONCURRENCY, async (doc, index) => {
+    const parsed = await completeJson<ExtractedFields>(
+      providers.llm,
+      {
+        system: SYSTEM,
+        prompt: `Brand context: ${brand.name} (${brand.industry}).\nSource title: ${doc.title}\nSource URL: ${doc.url}\nSource content: ${doc.snippet}`,
+        maxTokens: 500,
+        model: DEFAULT_EXTRACTION_MODEL,
+        kind: "signal-extract",
+      },
+      (r) => usage.recordLlm("extract", r.model, r.inputTokens, r.outputTokens)
+    );
+    return { index, doc, parsed };
   });
-  usage.recordLlm("extract", result.model, result.inputTokens, result.outputTokens);
 
-  const parsed = extractJson<{
-    title: string;
-    summary: string;
-    soWhat: string;
-    category: Signal["category"];
-    type: Signal["type"];
-    confidence: Signal["confidence"];
-    surprise: 1 | 2 | 3;
-  }>(result.text);
-
-  return {
-    id: `S-${String(idIndex).padStart(3, "0")}`,
+  // Restore source order, then assign stable sequential IDs.
+  results.sort((a, b) => a.index - b.index);
+  const signals: Signal[] = results.map(({ doc, parsed }, i) => ({
+    id: `S-${String(i + 1).padStart(3, "0")}`,
     title: parsed.title,
     url: doc.url,
-    geo: brand.geographies[idIndex % brand.geographies.length] ?? "Global",
+    geo: parsed.geo || "Global",
     category: parsed.category,
     surprise: parsed.surprise,
     confidence: parsed.confidence,
@@ -45,18 +60,7 @@ export async function extractSignal(
     summary: parsed.summary,
     soWhat: parsed.soWhat,
     publishedAt: doc.publishedAt,
-  };
-}
+  }));
 
-export async function runExtract(
-  docs: RawDoc[],
-  brand: BrandConfig,
-  providers: Providers,
-  usage: UsageTracker
-): Promise<Signal[]> {
-  const signals: Signal[] = [];
-  for (let i = 0; i < docs.length; i++) {
-    signals.push(await extractSignal(docs[i], brand, i + 1, providers, usage));
-  }
-  return signals;
+  return { signals, failedDocs: failures.length };
 }

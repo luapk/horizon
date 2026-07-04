@@ -1,25 +1,30 @@
 import type { Scenario, TimelineItem, TimelineLane } from "@horizon/shared";
 
-/** Mechanical, not LLM-generated -- tier already encodes urgency/certainty,
- * so deriving the lane from it is cheaper and just as defensible as asking
- * an LLM to re-derive the same signal. */
+const YEAR_OFFSET: Record<TimelineLane, number> = { now: 0, monitor: 1, prepare: 3 };
+
+/** Built from each scenario's recommended actions (specific things the brand
+ * should do), falling back to the scenario title only when a scenario came
+ * back without actions. */
 export function buildTimeline(scenarios: Scenario[]): TimelineItem[] {
   const currentYear = new Date().getFullYear();
-  const laneFor: Record<Scenario["tier"], TimelineLane> = {
-    Probable: "now",
-    Cassandra: "monitor",
-    Deep: "prepare",
-  };
-  const yearOffsetFor: Record<Scenario["tier"], number> = {
-    Probable: 0,
-    Cassandra: 1,
-    Deep: 3,
-  };
+  const items: TimelineItem[] = [];
 
-  return scenarios.map((s) => ({
-    label: s.title,
-    lane: laneFor[s.tier],
-    year: currentYear + yearOffsetFor[s.tier],
-    scenarioId: s.id,
-  }));
+  for (const s of scenarios) {
+    if (s.actions.length > 0) {
+      for (const action of s.actions) {
+        items.push({
+          label: action.label,
+          lane: action.lane,
+          year: currentYear + YEAR_OFFSET[action.lane],
+          scenarioId: s.id,
+        });
+      }
+    } else {
+      const lane: TimelineLane = s.tier === "Probable" ? "now" : s.tier === "Cassandra" ? "monitor" : "prepare";
+      items.push({ label: s.title, lane, year: currentYear + YEAR_OFFSET[lane], scenarioId: s.id });
+    }
+  }
+
+  const laneOrder: Record<TimelineLane, number> = { now: 0, monitor: 1, prepare: 2 };
+  return items.sort((a, b) => laneOrder[a.lane] - laneOrder[b.lane] || a.year - b.year);
 }

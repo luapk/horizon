@@ -1,15 +1,17 @@
-import type { SearchProvider, SearchResult } from "./types.js";
+import type { SearchOptions, SearchProvider, SearchResult } from "./types.js";
 
 /** No paid calls, no network -- deterministic stand-in so the pipeline can be
- * exercised end-to-end without a Tavily/Exa/Serper API key. */
+ * exercised end-to-end without a Tavily/Exa/Serper API key. Results vary by
+ * query so downstream dedupe/clustering behaves non-degenerately in demos. */
 export class MockSearchProvider implements SearchProvider {
   readonly name = "mock-search";
 
-  async search(query: string, maxResults: number): Promise<{ results: SearchResult[]; calls: number }> {
+  async search(query: string, maxResults: number, options?: SearchOptions): Promise<{ results: SearchResult[]; calls: number }> {
+    const domainNote = options?.includeDomains?.length ? ` (restricted to ${options.includeDomains.join(", ")})` : "";
     const results: SearchResult[] = Array.from({ length: Math.min(maxResults, 3) }, (_, i) => ({
       title: `[MOCK] ${query} -- finding ${i + 1}`,
       url: `https://example.invalid/mock/${encodeURIComponent(query)}/${i + 1}`,
-      snippet: `This is a mock search result standing in for a real "${query}" query. Configure TAVILY_API_KEY for live ingestion.`,
+      snippet: `Mock result ${i + 1} for "${query}"${domainNote}. Distinct angle: ${["regulatory shift", "startup funding round", "consumer behavior study"][i % 3]} relating to ${query}. Configure TAVILY_API_KEY for live ingestion.`,
       publishedAt: new Date().toISOString(),
     }));
     return { results, calls: 1 };
@@ -21,7 +23,7 @@ export class TavilySearchProvider implements SearchProvider {
   readonly name = "tavily";
   constructor(private readonly apiKey: string) {}
 
-  async search(query: string, maxResults: number): Promise<{ results: SearchResult[]; calls: number }> {
+  async search(query: string, maxResults: number, options?: SearchOptions): Promise<{ results: SearchResult[]; calls: number }> {
     const res = await fetch("https://api.tavily.com/search", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -30,6 +32,7 @@ export class TavilySearchProvider implements SearchProvider {
         query,
         max_results: maxResults,
         search_depth: "advanced",
+        ...(options?.includeDomains?.length ? { include_domains: options.includeDomains } : {}),
       }),
     });
     if (!res.ok) {

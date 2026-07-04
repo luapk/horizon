@@ -60,10 +60,37 @@ router.post("/scans/estimate", (req, res) => {
   res.json(estimateScanCost(scope));
 });
 
+/** Optional spend governance, off by default. MAX_SCAN_USD blocks any scan
+ * whose high estimate exceeds it; MONTHLY_BUDGET_USD blocks new scans once
+ * this month's committed spend (actuals for finished scans, high estimates
+ * for in-flight ones) would exceed the budget. */
+function spendCapViolation(estimateHighUsd: number): string | null {
+  const maxScan = Number(process.env.MAX_SCAN_USD ?? 0);
+  if (maxScan > 0 && estimateHighUsd > maxScan) {
+    return `scan estimate high bound ($${estimateHighUsd.toFixed(2)}) exceeds the per-scan cap ($${maxScan.toFixed(2)}) -- reduce scan scope`;
+  }
+  const monthlyBudget = Number(process.env.MONTHLY_BUDGET_USD ?? 0);
+  if (monthlyBudget > 0) {
+    const monthStart = new Date();
+    monthStart.setUTCDate(1);
+    monthStart.setUTCHours(0, 0, 0, 0);
+    const committed = listScans()
+      .filter((s) => new Date(s.createdAt) >= monthStart)
+      .reduce((sum, s) => sum + (s.status === "completed" || s.status === "failed" ? (s.actualCostUsd ?? 0) : s.estimate.highUsd), 0);
+    if (committed + estimateHighUsd > monthlyBudget) {
+      return `monthly budget ($${monthlyBudget.toFixed(2)}) would be exceeded: $${committed.toFixed(2)} already committed this month + $${estimateHighUsd.toFixed(2)} for this scan`;
+    }
+  }
+  return null;
+}
+
 router.post("/scans", (req, res) => {
   const brand = getBrand(req.body?.brandId);
   if (!brand) { res.status(404).json({ error: "brand not found" }); return; }
   const scope = ScanScope.parse(req.body?.scope ?? {});
+
+  const capViolation = spendCapViolation(estimateScanCost(scope).highUsd);
+  if (capViolation) { res.status(403).json({ error: capViolation }); return; }
 
   const id = randomUUID();
   const pending = {
