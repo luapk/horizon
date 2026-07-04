@@ -1,4 +1,7 @@
 import type { BrandConfig, CostEstimate, ScanResult, ScanScope } from "@horizon/shared";
+import { demoApi } from "./demoApi.js";
+
+export const IS_DEMO = import.meta.env.VITE_DEMO === "1";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8787/api";
 
@@ -15,7 +18,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export const api = {
+const httpApi = {
   login: (password: string) => request<{ ok: true }>("/login", { method: "POST", body: JSON.stringify({ password }) }),
   logout: () => request<{ ok: true }>("/logout", { method: "POST" }),
   me: () => request<{ ok: true }>("/me"),
@@ -31,3 +34,5 @@ export const api = {
   getScan: (id: string) => request<ScanResult>(`/scans/${id}`),
   listScans: (brandId?: string) => request<ScanResult[]>(`/scans${brandId ? `?brandId=${brandId}` : ""}`),
 };
+
+export const api = IS_DEMO ? demoApi : httpApi;

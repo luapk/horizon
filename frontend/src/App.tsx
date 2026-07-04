@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { BrandConfig } from "@horizon/shared";
 import { T } from "./theme.js";
-import { api } from "./api.js";
+import { api, IS_DEMO } from "./api.js";
 import { Login } from "./components/Login.js";
 import { BrandForm } from "./components/BrandForm.js";
 import { ScanLauncher } from "./components/ScanLauncher.js";
@@ -33,7 +33,14 @@ export default function App() {
   return (
     <div style={{ minHeight: "100vh", background: T.bgAbyss, color: T.textPrimary, fontFamily: "system-ui, sans-serif" }}>
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 32px", borderBottom: `1px solid ${T.glassBorder}` }}>
-        <div style={{ fontFamily: "monospace", fontWeight: 700, letterSpacing: 4, color: T.gold }}>HORIZON ENGINE</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ fontFamily: "monospace", fontWeight: 700, letterSpacing: 4, color: T.gold }}>HORIZON ENGINE</div>
+          {IS_DEMO && (
+            <span style={{ fontSize: 10, fontFamily: "monospace", letterSpacing: 1, color: T.amber, border: `1px solid ${T.amber}40`, borderRadius: 3, padding: "2px 8px" }}>
+              DEMO · SIMULATED DATA
+            </span>
+          )}
+        </div>
         <button
           onClick={() => { setActiveScanId(null); setShowBrandForm(false); }}
           style={{ background: "none", border: `1px solid ${T.glassBorder}`, borderRadius: 4, padding: "6px 14px", color: T.textSecondary, cursor: "pointer" }}

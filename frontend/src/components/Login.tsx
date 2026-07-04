@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { T } from "../theme.js";
-import { api } from "../api.js";
+import { api, IS_DEMO } from "../api.js";
 
 export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [password, setPassword] = useState("");
@@ -40,6 +40,11 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
           </button>
         </div>
         {error && <div style={{ color: T.red, fontSize: 11, marginTop: 12 }}>ACCESS DENIED</div>}
+        {IS_DEMO && (
+          <div style={{ marginTop: 32, fontSize: 11, color: T.amber, fontFamily: "monospace", letterSpacing: 1 }}>
+            DEMO BUILD · access code: demo · all data simulated in-browser
+          </div>
+        )}
       </div>
     </div>
   );

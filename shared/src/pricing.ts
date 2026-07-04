@@ -21,11 +21,15 @@ export const LLM_PRICING: Record<string, LlmPrice> = {
 export const DEFAULT_EXTRACTION_MODEL = "claude-haiku-4-5";
 export const DEFAULT_SYNTHESIS_MODEL = "claude-sonnet-5";
 
+/** Env access that survives the browser (shared is bundled into the frontend). */
+const env = (key: string): string | undefined =>
+  typeof process !== "undefined" && process.env ? process.env[key] : undefined;
+
 /** USD per 1M embedding tokens. Placeholder -- override via EMBEDDING_PRICE_PER_MTOK. */
-export const DEFAULT_EMBEDDING_PRICE_PER_MTOK = Number(process.env.EMBEDDING_PRICE_PER_MTOK ?? 0.06);
+export const DEFAULT_EMBEDDING_PRICE_PER_MTOK = Number(env("EMBEDDING_PRICE_PER_MTOK") ?? 0.06);
 
 /** USD per search-API call (one query -> one page of results). Placeholder -- override via SEARCH_PRICE_PER_CALL. */
-export const DEFAULT_SEARCH_PRICE_PER_CALL = Number(process.env.SEARCH_PRICE_PER_CALL ?? 0.008);
+export const DEFAULT_SEARCH_PRICE_PER_CALL = Number(env("SEARCH_PRICE_PER_CALL") ?? 0.008);
 
 export function llmCostUsd(model: string, inputTokens: number, outputTokens: number): number {
   const price = LLM_PRICING[model];
