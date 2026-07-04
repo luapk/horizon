@@ -21,6 +21,10 @@ interface Hover {
 const DEG = Math.PI / 180;
 const TILT = -0.42;
 
+/** Positive modulo -- JS `%` keeps the sign, which once fed a negative
+ * radius into ctx.arc and killed the whole render loop. Never again. */
+const wrap01 = (v: number) => ((v % 1) + 1) % 1;
+
 function buildMarkers(signals: Signal[]): { markers: Marker[]; unplotted: Signal[] } {
   const byLoc = new Map<string, Marker>();
   const unplotted: Signal[] = [];
@@ -36,16 +40,15 @@ function buildMarkers(signals: Signal[]): { markers: Marker[]; unplotted: Signal
       if (existing) {
         existing.signals.push(s);
       } else {
-        byLoc.set(key, { lat: p.lat, lng: p.lng, name: p.name, signals: [s], color: STEEP_COLORS[s.category] ?? T.gold });
+        byLoc.set(key, { lat: p.lat, lng: p.lng, name: p.name, signals: [s], color: STEEP_COLORS[s.category] ?? T.violet });
       }
     }
   }
-  // Marker color = dominant STEEP category at that location.
   for (const m of byLoc.values()) {
     const counts = new Map<string, number>();
     for (const s of m.signals) counts.set(s.category, (counts.get(s.category) ?? 0) + 1);
     const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-    m.color = STEEP_COLORS[dominant ?? ""] ?? T.gold;
+    m.color = STEEP_COLORS[dominant ?? ""] ?? T.violet;
   }
   return { markers: [...byLoc.values()], unplotted };
 }
@@ -55,8 +58,7 @@ export function Globe({ signals, size = 460 }: { signals: Signal[]; size?: numbe
   const [hover, setHover] = useState<Hover | null>(null);
   const { markers, unplotted } = useMemo(() => buildMarkers(signals), [signals]);
 
-  // Mutable render state lives in refs so the rAF loop never re-binds.
-  const state = useRef({ rotY: 0.6, tilt: TILT, dragging: false, lastX: 0, lastY: 0, idleAt: 0, markers });
+  const state = useRef({ rotY: 0.6, tilt: TILT, dragging: false, lastX: 0, lastY: 0, idleAt: -10000, markers });
   state.current.markers = markers;
 
   useEffect(() => {
@@ -68,14 +70,14 @@ export function Globe({ signals, size = 460 }: { signals: Signal[]; size?: numbe
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = size * dpr;
     canvas.height = size * dpr;
-    ctx.scale(dpr, dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const dots = landDots();
     const cx = size / 2;
     const cy = size / 2;
     const R = size * 0.4;
     let raf = 0;
-    let start = performance.now();
+    const start = performance.now();
 
     const project = (lat: number, lng: number, rotY: number, tilt: number) => {
       const phi = lat * DEG;
@@ -90,29 +92,39 @@ export function Globe({ signals, size = 460 }: { signals: Signal[]; size?: numbe
 
     const frame = (now: number) => {
       const s = state.current;
-      if (!s.dragging && now - s.idleAt > 2200) s.rotY += 0.0016;
+      if (!s.dragging && now - s.idleAt > 2000) s.rotY += 0.0034;
       const t = (now - start) / 1000;
 
       ctx.clearRect(0, 0, size, size);
 
-      // Sphere ground: barely-there radial fill + rim.
+      // Atmosphere halo behind the sphere.
+      const halo = ctx.createRadialGradient(cx, cy, R * 0.85, cx, cy, R * 1.22);
+      halo.addColorStop(0, "rgba(143, 184, 255, 0.0)");
+      halo.addColorStop(0.75, "rgba(143, 184, 255, 0.055)");
+      halo.addColorStop(1, "rgba(179, 157, 255, 0.0)");
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 1.22, 0, Math.PI * 2);
+      ctx.fillStyle = halo;
+      ctx.fill();
+
+      // Sphere ground.
       const grad = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.1, cx, cy, R);
-      grad.addColorStop(0, "rgba(36, 48, 68, 0.55)");
-      grad.addColorStop(1, "rgba(10, 14, 23, 0.9)");
+      grad.addColorStop(0, "rgba(38, 48, 76, 0.6)");
+      grad.addColorStop(1, "rgba(8, 11, 22, 0.92)");
       ctx.beginPath();
       ctx.arc(cx, cy, R, 0, Math.PI * 2);
       ctx.fillStyle = grad;
       ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.strokeStyle = "rgba(179, 157, 255, 0.16)";
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // Land: depth-cued dot matrix.
+      // Land: depth-cued dot matrix, cool blue-grey.
       for (const d of dots) {
         const p = project(d.lat, d.lng, s.rotY, s.tilt);
         if (p.depth <= 0.02) continue;
-        const a = 0.12 + p.depth * 0.5;
-        ctx.fillStyle = `rgba(122, 134, 152, ${a.toFixed(3)})`;
+        const a = 0.1 + p.depth * 0.52;
+        ctx.fillStyle = `rgba(139, 158, 196, ${a.toFixed(3)})`;
         ctx.fillRect(p.sx - 0.7, p.sy - 0.7, 1.4, 1.4);
       }
 
@@ -120,19 +132,28 @@ export function Globe({ signals, size = 460 }: { signals: Signal[]; size?: numbe
       for (const m of s.markers) {
         const p = project(m.lat, m.lng, s.rotY, s.tilt);
         if (p.depth <= 0.02) continue;
-        const base = Math.min(2.4 + m.signals.length * 0.7, 6);
-        const pulse = (t * 0.55 + (m.lat + m.lng) * 0.01) % 1;
+        const base = Math.min(2.6 + m.signals.length * 0.7, 6.5);
+        const pulse = wrap01(t * 0.5 + (m.lat + m.lng) * 0.01);
 
         ctx.beginPath();
-        ctx.arc(p.sx, p.sy, base + pulse * 11, 0, Math.PI * 2);
-        ctx.strokeStyle = m.color + Math.round((1 - pulse) * 110).toString(16).padStart(2, "0");
-        ctx.lineWidth = 1;
+        ctx.arc(p.sx, p.sy, base + pulse * 12, 0, Math.PI * 2);
+        ctx.strokeStyle = m.color + Math.round((1 - pulse) * 120).toString(16).padStart(2, "0");
+        ctx.lineWidth = 1.2;
         ctx.stroke();
+
+        // Soft glow under the core.
+        const glow = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, base * 2.6);
+        glow.addColorStop(0, m.color + "55");
+        glow.addColorStop(1, m.color + "00");
+        ctx.beginPath();
+        ctx.arc(p.sx, p.sy, base * 2.6, 0, Math.PI * 2);
+        ctx.fillStyle = glow;
+        ctx.fill();
 
         ctx.beginPath();
         ctx.arc(p.sx, p.sy, base, 0, Math.PI * 2);
         ctx.fillStyle = m.color;
-        ctx.globalAlpha = 0.35 + p.depth * 0.65;
+        ctx.globalAlpha = 0.45 + p.depth * 0.55;
         ctx.fill();
         ctx.globalAlpha = 1;
       }
@@ -160,6 +181,7 @@ export function Globe({ signals, size = 460 }: { signals: Signal[]; size?: numbe
       s.lastX = e.clientX;
       s.lastY = e.clientY;
       canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = "grabbing";
     };
     const onMove = (e: PointerEvent) => {
       const s = state.current;
@@ -180,7 +202,8 @@ export function Globe({ signals, size = 460 }: { signals: Signal[]; size?: numbe
     const onUp = (e: PointerEvent) => {
       state.current.dragging = false;
       state.current.idleAt = performance.now();
-      canvas.releasePointerCapture(e.pointerId);
+      canvas.style.cursor = "grab";
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
     };
     const onLeave = () => setHover(null);
 
@@ -205,20 +228,18 @@ export function Globe({ signals, size = 460 }: { signals: Signal[]; size?: numbe
       <canvas ref={canvasRef} style={{ width: size, height: size, display: "block", margin: "0 auto", cursor: "grab", touchAction: "none" }} />
 
       {hover && (
-        <div style={{
+        <div className="glass--strong" style={{
           position: "absolute",
-          left: Math.min(hover.x + 14, size - 220),
+          left: Math.min(hover.x + 14, size - 224),
           top: hover.y + 10,
-          width: 210,
-          background: "rgba(10, 14, 23, 0.94)",
-          border: `1px solid ${hover.marker.color}44`,
-          borderRadius: 6,
-          padding: "10px 12px",
+          width: 214,
+          borderRadius: 10,
+          padding: "11px 13px",
           pointerEvents: "none",
           zIndex: 5,
-          backdropFilter: "blur(6px)",
+          animation: "fadeIn 150ms ease",
         }}>
-          <div style={{ ...eyebrow(hover.marker.color), marginBottom: 6 }}>
+          <div style={{ ...eyebrow(hover.marker.color), marginBottom: 7 }}>
             {hover.marker.name} · {hover.marker.signals.length} signal{hover.marker.signals.length > 1 ? "s" : ""}
           </div>
           {hover.marker.signals.slice(0, 3).map((s) => (
@@ -232,11 +253,11 @@ export function Globe({ signals, size = 460 }: { signals: Signal[]; size?: numbe
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4, minHeight: 18 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, minHeight: 18 }}>
         <div style={{ display: "flex", gap: 12 }}>
           {categories.map((c) => (
             <span key={c} style={{ display: "flex", alignItems: "center", gap: 5, fontFamily: FONT.mono, fontSize: 9, letterSpacing: 1.5, color: T.textSecondary }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: STEEP_COLORS[c] }} />
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: STEEP_COLORS[c], boxShadow: `0 0 8px ${STEEP_COLORS[c]}66` }} />
               {c}
             </span>
           ))}

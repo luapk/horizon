@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { BrandConfig } from "@horizon/shared";
-import { T, FONT, card, eyebrow, inputStyle, goldButton } from "../theme.js";
+import { T, FONT, eyebrow, inputStyle, primaryButton } from "../theme.js";
 import { api } from "../api.js";
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -47,14 +47,14 @@ export function BrandForm({ onCreated }: { onCreated: (brand: BrandConfig) => vo
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", animation: "fadeUp 400ms ease" }}>
-      <div style={{ ...eyebrow(T.gold), marginBottom: 10 }}>SCAN TARGET</div>
+      <div style={{ ...eyebrow(T.violet), marginBottom: 10 }}>SCAN TARGET</div>
       <h1 style={{ fontFamily: FONT.display, fontSize: 34, fontWeight: 400, color: T.textHeading, margin: "0 0 8px" }}>New brand</h1>
       <p style={{ fontSize: 13, color: T.textSecondary, margin: "0 0 28px", lineHeight: 1.6 }}>
         Everything the pipeline knows about a brand comes from this configuration — queries, business
         units in the strategy matrix, and which sources count as trusted.
       </p>
 
-      <div style={{ ...card, padding: 32, display: "grid", gap: 22 }}>
+      <div className="glass" style={{ padding: 32, display: "grid", gap: 22 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
           <Field label="Brand name">
             <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Corp" />
@@ -81,9 +81,9 @@ export function BrandForm({ onCreated }: { onCreated: (brand: BrandConfig) => vo
           <input style={inputStyle} value={curatedSources} onChange={(e) => setCuratedSources(e.target.value)} placeholder="petfoodindustry.com, fda.gov, nature.com" />
         </Field>
 
-        {error && <div style={{ color: T.red, fontSize: 12, lineHeight: 1.5 }}>{error}</div>}
+        {error && <div style={{ color: T.coral, fontSize: 12, lineHeight: 1.5 }}>{error}</div>}
 
-        <button onClick={submit} disabled={busy || !name || !industry} style={{ ...goldButton, opacity: busy || !name || !industry ? 0.45 : 1, justifySelf: "start" }}>
+        <button className="btn-primary" onClick={submit} disabled={busy || !name || !industry} style={{ ...primaryButton, opacity: busy || !name || !industry ? 0.45 : 1, justifySelf: "start" }}>
           {busy ? "CREATING…" : "CREATE BRAND"}
         </button>
       </div>

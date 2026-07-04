@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { BrandConfig } from "@horizon/shared";
-import { T, FONT, ghostButton } from "./theme.js";
+import { T, FONT, ghostButtonStyle } from "./theme.js";
 import { api, IS_DEMO } from "./api.js";
 import { Login } from "./components/Login.js";
 import { BrandForm } from "./components/BrandForm.js";
@@ -32,62 +32,68 @@ export default function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: T.bgAbyss, color: T.textPrimary, fontFamily: FONT.body }}>
+    <div style={{ minHeight: "100vh", background: T.bgAbyss, color: T.textPrimary, fontFamily: FONT.body, position: "relative" }}>
+      <div className="orb orb--blue" />
+      <div className="orb orb--violet" />
+      <div className="orb orb--pink" />
       <GrainOverlay />
 
-      <header style={{
+      <header className="glass--strong" style={{
         position: "sticky", top: 0, zIndex: 50,
-        background: "rgba(6, 10, 18, 0.88)", backdropFilter: "blur(12px)",
-        borderBottom: `1px solid ${T.glassBorder}`,
+        borderRadius: 0, borderLeft: "none", borderRight: "none", borderTop: "none",
+        boxShadow: "0 12px 40px rgba(2, 4, 10, 0.35)",
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 60, padding: "0 32px", maxWidth: 1440, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <button
               onClick={() => { setActiveScanId(null); setShowBrandForm(false); }}
-              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: FONT.mono, fontSize: 14, fontWeight: 700, letterSpacing: 6, color: T.gold }}
+              style={{
+                background: `linear-gradient(90deg, ${T.blue}, ${T.violet}, ${T.pink})`,
+                WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+                border: "none", cursor: "pointer", padding: 0,
+                fontFamily: FONT.mono, fontSize: 14, fontWeight: 700, letterSpacing: 6,
+              }}
             >
               HORIZON
             </button>
             <div style={{ width: 1, height: 20, background: T.glassBorder }} />
             <span style={{ fontSize: 11, color: T.textMuted, letterSpacing: 0.3 }}>Multi-brand futures intelligence</span>
             {IS_DEMO && (
-              <span style={{ fontFamily: FONT.mono, fontSize: 9, letterSpacing: 1.5, color: T.amber, border: `1px solid ${T.amber}35`, borderRadius: 3, padding: "3px 8px" }}>
+              <span style={{ fontFamily: FONT.mono, fontSize: 9, letterSpacing: 1.5, color: T.peach, border: `1px solid ${T.peach}35`, borderRadius: 4, padding: "3px 8px" }}>
                 DEMO · SIMULATED DATA
               </span>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ display: "flex", alignItems: "center", gap: 7, fontFamily: FONT.mono, fontSize: 9, letterSpacing: 2, color: T.textMuted }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.green, animation: "pulse 2s ease infinite" }} />
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.mint, boxShadow: `0 0 8px ${T.mint}88`, animation: "pulse 2s ease infinite" }} />
               OPERATIONAL
             </span>
-            <button onClick={() => { setShowBrandForm(true); setActiveScanId(null); }} style={ghostButton(T.textSecondary)}>+ BRAND</button>
+            <button className="btn-ghost" onClick={() => { setShowBrandForm(true); setActiveScanId(null); }} style={ghostButtonStyle}>+ BRAND</button>
           </div>
         </div>
       </header>
 
-      <main style={{ padding: "40px 32px 96px", maxWidth: 1440, margin: "0 auto" }}>
+      <main style={{ position: "relative", zIndex: 1, padding: "40px 32px 96px", maxWidth: 1440, margin: "0 auto" }}>
         {activeScanId ? (
           <ScanResults scanId={activeScanId} brands={brands} />
         ) : showBrandForm ? (
           <BrandForm onCreated={(b) => { setBrands((prev) => [...prev, b]); setShowBrandForm(false); }} />
         ) : brands.length === 0 ? (
-          <div style={{ maxWidth: 620, margin: "80px auto 0", textAlign: "center", animation: "fadeUp 500ms ease" }}>
-            <h1 style={{ fontFamily: FONT.display, fontSize: 46, fontWeight: 400, color: T.textHeading, lineHeight: 1.12, margin: "0 0 18px", textWrap: "balance" as never }}>
-              Futures intelligence,<br /><span style={{ color: T.gold, fontStyle: "italic" }}>for any brand.</span>
+          <div style={{ maxWidth: 640, margin: "72px auto 0", textAlign: "center", animation: "fadeUp 500ms ease" }}>
+            <h1 style={{ fontFamily: FONT.display, fontSize: 48, fontWeight: 400, color: T.textHeading, lineHeight: 1.12, margin: "0 0 18px", textWrap: "balance" as never }}>
+              Futures intelligence,<br />
+              <span style={{
+                fontStyle: "italic",
+                background: `linear-gradient(90deg, ${T.blue}, ${T.violet}, ${T.pink})`,
+                WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+              }}>for any brand.</span>
             </h1>
             <p style={{ fontSize: 15, color: T.textSecondary, lineHeight: 1.7, margin: "0 0 36px" }}>
               Point the engine at a brand and it scans live sources for signals, derives the structural
               drivers, writes evidence-cited scenarios — and shows you the cost before you spend a cent.
             </p>
-            <button
-              onClick={() => setShowBrandForm(true)}
-              style={{
-                background: `linear-gradient(180deg, ${T.gold}2E, ${T.gold}14)`, border: `1px solid ${T.gold}55`,
-                borderRadius: 5, padding: "13px 28px", color: T.gold, cursor: "pointer",
-                fontFamily: FONT.mono, fontSize: 12, fontWeight: 600, letterSpacing: 2,
-              }}
-            >
+            <button className="btn-primary" onClick={() => setShowBrandForm(true)} style={{ padding: "14px 30px", fontFamily: FONT.mono, fontSize: 12, fontWeight: 600, letterSpacing: 2 }}>
               CONFIGURE FIRST BRAND →
             </button>
           </div>

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { BrandConfig, ScanResult, Signal } from "@horizon/shared";
-import { T, FONT, card, eyebrow, STEEP_COLORS, STEEP_LABELS, TIER_COLORS, LANE_COLORS } from "../theme.js";
+import { T, FONT, eyebrow, STEEP_COLORS, STEEP_LABELS, TIER_COLORS, LANE_COLORS } from "../theme.js";
 import { api } from "../api.js";
 import { Globe } from "./Globe.js";
 import { AnimatedNumber } from "./AnimatedNumber.js";
@@ -20,14 +20,14 @@ const STAGE_LABELS: Record<string, string> = {
   matrix_timeline: "Scoring strategy matrix",
 };
 
-/** Render dispatch prose with [S-00x] citations as gold mono chips. */
+/** Render dispatch prose with [S-00x] citations as violet mono chips. */
 function Dispatch({ text }: { text: string }) {
   const parts = text.split(/(\[S-\d{3}\])/g);
   return (
     <p style={{ whiteSpace: "pre-wrap", color: T.textPrimary, lineHeight: 1.85, fontSize: 15.5, fontFamily: FONT.display, maxWidth: "68ch", margin: "0 0 4px" }}>
       {parts.map((part, i) =>
         /^\[S-\d{3}\]$/.test(part) ? (
-          <span key={i} style={{ fontFamily: FONT.mono, fontSize: 10.5, color: T.gold, background: `${T.gold}14`, border: `1px solid ${T.gold}30`, borderRadius: 3, padding: "1px 5px", margin: "0 2px", verticalAlign: "1px", whiteSpace: "nowrap" }}>
+          <span key={i} style={{ fontFamily: FONT.mono, fontSize: 10.5, color: T.violet, background: `${T.violet}16`, border: `1px solid ${T.violet}35`, borderRadius: 4, padding: "1px 5px", margin: "0 2px", verticalAlign: "1px", whiteSpace: "nowrap" }}>
             {part.slice(1, -1)}
           </span>
         ) : (
@@ -42,22 +42,23 @@ function SurpriseDots({ level }: { level: number }) {
   return (
     <span style={{ fontFamily: FONT.mono, letterSpacing: 2, fontSize: 9 }}>
       {[1, 2, 3].map((i) => (
-        <span key={i} style={{ color: i <= level ? T.gold : T.textMuted }}>●</span>
+        <span key={i} style={{ color: i <= level ? T.violet : T.textMuted }}>●</span>
       ))}
     </span>
   );
 }
 
-function SignalCard({ s }: { s: Signal }) {
+function SignalCard({ s, index }: { s: Signal; index: number }) {
   const isAbsence = s.type === "Absence";
   const isCounter = s.type === "Counter-Signal";
-  const edge = isAbsence ? T.amber : isCounter ? T.red : STEEP_COLORS[s.category] ?? T.textMuted;
+  const edge = isAbsence ? T.peach : isCounter ? T.coral : STEEP_COLORS[s.category] ?? T.textMuted;
   return (
-    <div style={{
-      background: T.bgCard,
-      border: `1px ${isAbsence || isCounter ? "dashed" : "solid"} ${isAbsence ? T.amber + "45" : isCounter ? T.red + "45" : T.glassBorder}`,
+    <div className="glass--flat lift-sm" style={{
+      borderStyle: isAbsence || isCounter ? "dashed" : "solid",
+      borderColor: isAbsence ? `${T.peach}50` : isCounter ? `${T.coral}50` : undefined,
       borderLeft: `3px ${isAbsence || isCounter ? "dashed" : "solid"} ${edge}`,
-      borderRadius: 7, padding: "14px 16px", transition: "background 180ms ease",
+      padding: "14px 16px",
+      animation: `fadeUp 400ms ${Math.min(index * 40, 400)}ms both`,
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
         <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: T.textMuted, letterSpacing: 1 }}>{s.id} · {s.geo}</span>
@@ -85,21 +86,21 @@ function CostReconciliation({ scan }: { scan: ScanResult }) {
   const pct = (v: number) => `${(v / scaleMax) * 100}%`;
   const withinRange = actualCostUsd >= estimate.lowUsd && actualCostUsd <= estimate.highUsd;
   return (
-    <div style={{ ...card, padding: "22px 26px" }}>
+    <div className="glass" style={{ padding: "22px 26px", animation: "fadeUp 450ms 200ms both" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
         <span style={{ ...eyebrow() }}>COST · ESTIMATE VS ACTUAL</span>
-        <span style={{ fontFamily: FONT.mono, fontSize: 11, color: withinRange || actualCostUsd < estimate.lowUsd ? T.green : T.amber }}>
+        <span style={{ fontFamily: FONT.mono, fontSize: 11, color: withinRange || actualCostUsd < estimate.lowUsd ? T.mint : T.peach }}>
           {actualCostUsd === 0 ? "FREE RUN" : withinRange ? "WITHIN ESTIMATE" : actualCostUsd < estimate.lowUsd ? "UNDER ESTIMATE" : "OVER ESTIMATE"}
         </span>
       </div>
       <div style={{ position: "relative", height: 26 }}>
-        <div style={{ position: "absolute", top: 11, left: 0, right: 0, height: 4, background: T.bgPrimary, borderRadius: 2 }} />
-        <div style={{ position: "absolute", top: 11, left: pct(estimate.lowUsd), width: `calc(${pct(estimate.highUsd)} - ${pct(estimate.lowUsd)})`, height: 4, background: `${T.gold}50`, borderRadius: 2 }} />
-        <div style={{ position: "absolute", top: 4, left: pct(actualCostUsd), width: 2, height: 18, background: T.green, transform: "translateX(-1px)" }} />
+        <div style={{ position: "absolute", top: 11, left: 0, right: 0, height: 4, background: "rgba(255,255,255,0.05)", borderRadius: 2 }} />
+        <div style={{ position: "absolute", top: 11, left: pct(estimate.lowUsd), width: `calc(${pct(estimate.highUsd)} - ${pct(estimate.lowUsd)})`, height: 4, background: `linear-gradient(90deg, ${T.blue}66, ${T.violet}66, ${T.pink}66)`, borderRadius: 2 }} />
+        <div style={{ position: "absolute", top: 4, left: pct(actualCostUsd), width: 2, height: 18, background: T.mint, boxShadow: `0 0 10px ${T.mint}88`, transform: "translateX(-1px)" }} />
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", fontFamily: FONT.mono, fontSize: 10, color: T.textMuted, fontVariantNumeric: "tabular-nums" }}>
         <span>est ${estimate.lowUsd.toFixed(2)}–${estimate.highUsd.toFixed(2)}</span>
-        <span style={{ color: T.green }}>actual ${actualCostUsd.toFixed(3)}</span>
+        <span style={{ color: T.mint }}>actual ${actualCostUsd.toFixed(3)}</span>
       </div>
     </div>
   );
@@ -138,13 +139,13 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
   if (scan.status === "pending" || scan.status === "running") {
     return (
       <div style={{ maxWidth: 640, margin: "40px auto 0", animation: "fadeUp 400ms ease" }}>
-        <div style={{ ...eyebrow(T.gold), marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.gold, animation: "pulse 1.4s ease infinite" }} />
+        <div style={{ ...eyebrow(T.violet), marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.violet, boxShadow: `0 0 10px ${T.violet}`, animation: "pulse 1.4s ease infinite" }} />
           SCAN IN PROGRESS · {brandName.toUpperCase()}
         </div>
-        <div style={{ ...card, padding: "26px 30px", fontFamily: FONT.mono }}>
+        <div className="glass--strong" style={{ padding: "26px 30px", fontFamily: FONT.mono }}>
           {scan.progress.map((p, i) => (
-            <div key={i} style={{ display: "flex", gap: 12, alignItems: "baseline", fontSize: 12, padding: "5px 0", color: p.status === "failed" ? T.red : p.status === "done" ? T.textSecondary : T.gold }}>
+            <div key={i} style={{ display: "flex", gap: 12, alignItems: "baseline", fontSize: 12, padding: "5px 0", color: p.status === "failed" ? T.coral : p.status === "done" ? T.textSecondary : T.violet, animation: "fadeIn 300ms ease" }}>
               <span style={{ width: 14, flexShrink: 0 }}>
                 {p.status === "done" ? "▸" : p.status === "failed" ? "✕" : <span style={{ animation: "pulse 1.2s ease infinite" }}>●</span>}
               </span>
@@ -162,8 +163,8 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
 
   if (scan.status === "failed") {
     return (
-      <div style={{ ...card, borderColor: `${T.red}40`, padding: 32, maxWidth: 640, margin: "40px auto 0" }}>
-        <div style={{ ...eyebrow(T.red), marginBottom: 10 }}>SCAN FAILED</div>
+      <div className="glass" style={{ borderColor: `${T.coral}45`, padding: 32, maxWidth: 640, margin: "40px auto 0" }}>
+        <div style={{ ...eyebrow(T.coral), marginBottom: 10 }}>SCAN FAILED</div>
         <div style={{ color: T.textPrimary, fontSize: 13, lineHeight: 1.6 }}>{scan.error}</div>
         {(scan.actualCostUsd ?? 0) > 0 && (
           <div style={{ marginTop: 12, fontFamily: FONT.mono, fontSize: 11, color: T.textMuted }}>spend before failure: ${scan.actualCostUsd?.toFixed(3)}</div>
@@ -177,44 +178,39 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
 
   return (
     <div style={{ animation: "fadeIn 300ms ease" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 4 }}>
-        <div>
-          <div style={{ ...eyebrow(T.gold), marginBottom: 8 }}>SCAN COMPLETE · {new Date(scan.createdAt).toLocaleDateString()}</div>
-          <h1 style={{ fontFamily: FONT.display, fontSize: 38, fontWeight: 400, color: T.textHeading, margin: 0, lineHeight: 1.1 }}>
-            {brandName}<span style={{ color: T.textMuted }}>:</span> <span style={{ fontStyle: "italic", color: T.gold }}>the decade ahead</span>
-          </h1>
-        </div>
+      <div style={{ marginBottom: 4 }}>
+        <div style={{ ...eyebrow(T.violet), marginBottom: 8 }}>SCAN COMPLETE · {new Date(scan.createdAt).toLocaleDateString()}</div>
+        <h1 style={{ fontFamily: FONT.display, fontSize: 38, fontWeight: 400, color: T.textHeading, margin: 0, lineHeight: 1.1 }}>
+          {brandName}<span style={{ color: T.textMuted }}>:</span>{" "}
+          <span style={{
+            fontStyle: "italic",
+            background: `linear-gradient(90deg, ${T.blue}, ${T.violet}, ${T.pink})`,
+            WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+          }}>the decade ahead</span>
+        </h1>
       </div>
 
       <nav style={{ display: "flex", gap: 0, borderBottom: `1px solid ${T.glassBorder}`, margin: "24px 0 32px" }}>
         {NAV.map((n) => (
-          <button
-            key={n}
-            onClick={() => setView(n)}
-            style={{
-              background: "none", border: "none", cursor: "pointer", padding: "11px 18px", fontSize: 13,
-              fontFamily: FONT.body, fontWeight: 500,
-              color: view === n ? T.textHeading : T.textMuted,
-              borderBottom: view === n ? `2px solid ${T.gold}` : "2px solid transparent",
-              marginBottom: -1, transition: "color 150ms ease",
-            }}
-          >{n}</button>
+          <button key={n} className={`navtab${view === n ? " active" : ""}`} onClick={() => setView(n)}>
+            {n}
+          </button>
         ))}
       </nav>
 
       {view === "Overview" && (
-        <div style={{ display: "grid", gap: 20, animation: "fadeUp 350ms ease" }}>
+        <div style={{ display: "grid", gap: 20 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14 }}>
             {[
               { label: "Signals", value: scan.signals.length, color: T.blue },
-              { label: "Absences", value: absenceCount, color: T.amber },
-              { label: "Counter-signals", value: counterCount, color: T.red },
-              { label: "Drivers", value: scan.drivers.length, color: T.gold },
-              { label: "Scenarios", value: scan.scenarios.length, color: T.green },
-              { label: "Actions", value: scan.timeline.length, color: T.violet },
+              { label: "Absences", value: absenceCount, color: T.peach },
+              { label: "Counter-signals", value: counterCount, color: T.coral },
+              { label: "Drivers", value: scan.drivers.length, color: T.violet },
+              { label: "Scenarios", value: scan.scenarios.length, color: T.mint },
+              { label: "Actions", value: scan.timeline.length, color: T.pink },
             ].map((m, i) => (
-              <div key={m.label} style={{ ...card, padding: "18px 18px 14px", borderTop: `2px solid ${m.color}55` }}>
-                <div style={{ fontFamily: FONT.mono, fontSize: 30, fontWeight: 600, color: m.color, lineHeight: 1 }}>
+              <div key={m.label} className="glass lift" style={{ padding: "18px 18px 14px", borderTop: `2px solid ${m.color}66`, animation: `fadeUp 450ms ${i * 70}ms both` }}>
+                <div style={{ fontFamily: FONT.mono, fontSize: 30, fontWeight: 600, color: m.color, lineHeight: 1, textShadow: `0 0 24px ${m.color}44` }}>
                   <AnimatedNumber value={m.value} delay={i * 110} />
                 </div>
                 <div style={{ fontSize: 10.5, color: T.textMuted, marginTop: 7, letterSpacing: 0.3 }}>{m.label}</div>
@@ -223,26 +219,26 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
           </div>
           <CostReconciliation scan={scan} />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-            <div style={{ ...card, padding: 26 }}>
+            <div className="glass" style={{ padding: 26, animation: "fadeUp 450ms 280ms both" }}>
               <div style={{ ...eyebrow(), marginBottom: 16 }}>DRIVERS AT A GLANCE</div>
               <div style={{ display: "grid", gap: 10 }}>
                 {scan.drivers.map((d) => (
                   <div key={d.id} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                    <span style={{ fontFamily: FONT.mono, fontSize: 10, color: STEEP_COLORS[d.steep] ?? T.gold, flexShrink: 0 }}>{d.id}</span>
+                    <span style={{ fontFamily: FONT.mono, fontSize: 10, color: STEEP_COLORS[d.steep] ?? T.violet, flexShrink: 0 }}>{d.id}</span>
                     <span style={{ fontSize: 13, color: T.textPrimary, flex: 1 }}>{d.name}</span>
-                    <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: d.trajectory === "Accelerating" ? T.green : T.amber, flexShrink: 0 }}>
+                    <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: d.trajectory === "Accelerating" ? T.mint : T.peach, flexShrink: 0 }}>
                       {d.trajectory === "Accelerating" ? "↑" : "○"} {d.trajectory.toUpperCase()}
                     </span>
                   </div>
                 ))}
               </div>
             </div>
-            <div style={{ ...card, padding: 26 }}>
+            <div className="glass" style={{ padding: 26, animation: "fadeUp 450ms 360ms both" }}>
               <div style={{ ...eyebrow(), marginBottom: 16 }}>SCENARIO PORTFOLIO</div>
               <div style={{ display: "grid", gap: 10 }}>
                 {scan.scenarios.map((s) => (
-                  <button key={s.id} onClick={() => { setView("Scenarios"); setSelectedScenario(s.id); }}
-                    style={{ display: "flex", alignItems: "baseline", gap: 10, background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}>
+                  <button key={s.id} className="lift-sm" onClick={() => { setView("Scenarios"); setSelectedScenario(s.id); }}
+                    style={{ display: "flex", alignItems: "baseline", gap: 10, background: "none", border: "none", borderRadius: 6, cursor: "pointer", padding: "2px 4px", textAlign: "left" }}>
                     <span style={{ ...eyebrow(TIER_COLORS[s.tier], 9), flexShrink: 0, width: 74 }}>{s.tier}</span>
                     <span style={{ fontSize: 13, color: T.textPrimary, fontFamily: FONT.body }}>{s.title}</span>
                   </button>
@@ -254,8 +250,8 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
       )}
 
       {view === "Signals" && (
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(400px, 5fr) 7fr", gap: 20, alignItems: "start", animation: "fadeUp 350ms ease" }}>
-          <div style={{ ...card, padding: "22px 22px 16px", position: "sticky", top: 84 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(400px, 5fr) 7fr", gap: 20, alignItems: "start" }}>
+          <div className="glass--strong" style={{ padding: "22px 22px 16px", position: "sticky", top: 84, animation: "fadeUp 400ms both" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
               <span style={{ ...eyebrow() }}>SIGNAL ATLAS</span>
               <span style={{ fontFamily: FONT.mono, fontSize: 10, color: T.textMuted }}>{scan.signals.length} SIGNALS · DRAG TO ROTATE</span>
@@ -266,33 +262,33 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
           <div>
             <div style={{ display: "flex", gap: 5, marginBottom: 16, flexWrap: "wrap" }}>
               {["All", "S", "T", "Ec", "En", "P", "Absence", "Counter"].map((f) => (
-                <button key={f} onClick={() => setFilter(f)} style={{
-                  background: filter === f ? T.bgElevated : "transparent",
-                  border: `1px solid ${filter === f ? T.gold + "45" : T.glassBorder}`,
+                <button key={f} className="chip" onClick={() => setFilter(f)} style={{
+                  background: filter === f ? "rgba(179,157,255,0.12)" : "transparent",
+                  border: `1px solid ${filter === f ? T.violet + "55" : T.glassBorder}`,
                   color: filter === f ? T.textHeading : T.textMuted,
-                  padding: "6px 13px", fontSize: 10, cursor: "pointer", borderRadius: 4,
-                  fontFamily: FONT.mono, letterSpacing: 1, transition: "all 150ms ease",
+                  padding: "6px 13px", fontSize: 10,
+                  fontFamily: FONT.mono, letterSpacing: 1,
                 }}>
                   {f === "Absence" ? "◌ ABSENCE" : f === "Counter" ? "✕ COUNTER" : f.toUpperCase()}
                 </button>
               ))}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {filteredSignals.map((s) => <SignalCard key={s.id} s={s} />)}
+              {filteredSignals.map((s, i) => <SignalCard key={s.id} s={s} index={i} />)}
             </div>
           </div>
         </div>
       )}
 
       {view === "Drivers" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, animation: "fadeUp 350ms ease" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           {scan.drivers.map((d, i) => (
-            <div key={d.id} style={{ ...card, padding: 26, borderLeft: `3px solid ${STEEP_COLORS[d.steep] ?? T.textMuted}`, animation: `fadeUp 400ms ${i * 70}ms both` }}>
+            <div key={d.id} className="glass lift" style={{ padding: 26, borderLeft: `3px solid ${STEEP_COLORS[d.steep] ?? T.textMuted}`, animation: `fadeUp 450ms ${i * 80}ms both` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <span style={{ fontFamily: FONT.mono, fontSize: 10.5, color: STEEP_COLORS[d.steep] ?? T.gold, fontWeight: 600, letterSpacing: 1 }}>{d.id}</span>
+                <span style={{ fontFamily: FONT.mono, fontSize: 10.5, color: STEEP_COLORS[d.steep] ?? T.violet, fontWeight: 600, letterSpacing: 1 }}>{d.id}</span>
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                   <span style={{ ...eyebrow(STEEP_COLORS[d.steep] ?? T.textSecondary, 9) }}>{STEEP_LABELS[d.steep] ?? d.steep}</span>
-                  <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: d.trajectory === "Accelerating" ? T.green : T.amber }}>
+                  <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: d.trajectory === "Accelerating" ? T.mint : T.peach }}>
                     {d.trajectory === "Accelerating" ? "↑" : "○"} {d.trajectory.toUpperCase()}
                   </span>
                 </div>
@@ -301,7 +297,7 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
               <p style={{ fontSize: 13, color: T.textSecondary, lineHeight: 1.65, margin: "0 0 14px" }}>{d.desc}</p>
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                 {d.signalIds.map((sid) => (
-                  <span key={sid} style={{ fontFamily: FONT.mono, fontSize: 9, color: T.textMuted, background: T.bgPrimary, padding: "2px 7px", borderRadius: 3, letterSpacing: 0.5 }}>{sid}</span>
+                  <span key={sid} style={{ fontFamily: FONT.mono, fontSize: 9, color: T.textMuted, background: "rgba(255,255,255,0.04)", padding: "2px 7px", borderRadius: 4, letterSpacing: 0.5 }}>{sid}</span>
                 ))}
               </div>
             </div>
@@ -310,15 +306,15 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
       )}
 
       {view === "Scenarios" && (
-        <div style={{ animation: "fadeUp 350ms ease" }}>
+        <div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
-            {scan.scenarios.map((s) => (
-              <button key={s.id} onClick={() => setSelectedScenario(selectedScenario === s.id ? null : s.id)}
+            {scan.scenarios.map((s, i) => (
+              <button key={s.id} className="glass lift" onClick={() => setSelectedScenario(selectedScenario === s.id ? null : s.id)}
                 style={{
-                  ...card, padding: 22, cursor: "pointer", textAlign: "left",
+                  padding: 22, cursor: "pointer", textAlign: "left",
                   borderTop: `3px solid ${TIER_COLORS[s.tier]}`,
-                  outline: selectedScenario === s.id ? `1px solid ${TIER_COLORS[s.tier]}66` : "none",
-                  transition: "transform 180ms ease",
+                  outline: selectedScenario === s.id ? `1px solid ${TIER_COLORS[s.tier]}77` : "none",
+                  animation: `fadeUp 450ms ${i * 60}ms both`,
                 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 9 }}>
                   <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: T.textMuted }}>S{s.id}</span>
@@ -341,13 +337,13 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
               .map((id) => scan.signals.find((sig) => sig.id === id))
               .filter((sig): sig is Signal => !!sig);
             return (
-              <div style={{ ...card, marginTop: 24, padding: "42px 48px", position: "relative", borderColor: `${TIER_COLORS[s.tier]}30`, animation: "slideUp 350ms ease" }}>
-                <button onClick={() => setSelectedScenario(null)} style={{ position: "absolute", top: 18, right: 24, background: "none", border: "none", color: T.textMuted, fontSize: 22, cursor: "pointer" }}>×</button>
-                <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
-                  <div style={{ width: 46, height: 3, background: TIER_COLORS[s.tier], borderRadius: 2 }} />
+              <div className="glass--strong" style={{ marginTop: 24, padding: "42px 48px", position: "relative", borderColor: `${TIER_COLORS[s.tier]}35`, animation: "slideUp 380ms cubic-bezier(0.2, 0.8, 0.2, 1)" }}>
+                <button onClick={() => setSelectedScenario(null)} style={{ position: "absolute", top: 18, right: 24, background: "none", border: "none", color: T.textMuted, fontSize: 22, cursor: "pointer", transition: "color 150ms ease" }}>×</button>
+                <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20, flexWrap: "wrap" }}>
+                  <div style={{ width: 46, height: 3, background: `linear-gradient(90deg, ${TIER_COLORS[s.tier]}, transparent)`, borderRadius: 2 }} />
                   <span style={{ ...eyebrow(TIER_COLORS[s.tier]) }}>{s.tier === "Cassandra" ? "⚠ CASSANDRA" : s.tier}</span>
                   <span style={{ ...eyebrow() }}>CONFIDENCE: {s.confidence}</span>
-                  {evidence.length === 0 && <span style={{ ...eyebrow(T.red) }}>UNGROUNDED — NO EVIDENCE CITED</span>}
+                  {evidence.length === 0 && <span style={{ ...eyebrow(T.coral) }}>UNGROUNDED — NO EVIDENCE CITED</span>}
                 </div>
                 <h2 style={{ fontFamily: FONT.display, fontSize: 34, fontWeight: 400, color: T.textHeading, margin: "0 0 4px" }}>{s.title}</h2>
                 <p style={{ fontFamily: FONT.display, fontStyle: "italic", fontSize: 16, color: T.textSecondary, margin: "0 0 26px" }}>{s.tagline}</p>
@@ -355,12 +351,12 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
                 <Dispatch text={s.dispatch} />
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, margin: "28px 0" }}>
-                  <div style={{ background: `${T.amber}0D`, border: `1px solid ${T.amber}28`, borderRadius: 6, padding: "16px 18px" }}>
-                    <div style={{ ...eyebrow(T.amber), marginBottom: 8 }}>SHADOW SIDE</div>
+                  <div className="glass--flat" style={{ borderColor: `${T.peach}30`, background: `${T.peach}0A`, padding: "16px 18px" }}>
+                    <div style={{ ...eyebrow(T.peach), marginBottom: 8 }}>SHADOW SIDE</div>
                     <p style={{ fontSize: 12.5, color: T.textPrimary, lineHeight: 1.6, margin: 0 }}>{s.shadow}</p>
                   </div>
-                  <div style={{ background: `${T.red}0D`, border: `1px solid ${T.red}28`, borderRadius: 6, padding: "16px 18px" }}>
-                    <div style={{ ...eyebrow(T.red), marginBottom: 8 }}>KILLER ASSUMPTION</div>
+                  <div className="glass--flat" style={{ borderColor: `${T.coral}30`, background: `${T.coral}0A`, padding: "16px 18px" }}>
+                    <div style={{ ...eyebrow(T.coral), marginBottom: 8 }}>KILLER ASSUMPTION</div>
                     <p style={{ fontSize: 12.5, color: T.textPrimary, lineHeight: 1.6, margin: 0 }}>{s.killerAssumption}</p>
                   </div>
                 </div>
@@ -372,8 +368,8 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
                         <span style={{ ...eyebrow(T.textMuted, 9) }}>{dim}</span>
                         <span style={{ fontFamily: FONT.mono, fontSize: 10, color: T.textSecondary }}>{v}</span>
                       </div>
-                      <div style={{ height: 3, background: T.bgPrimary, borderRadius: 2 }}>
-                        <div style={{ height: "100%", width: `${v}%`, background: TIER_COLORS[s.tier], borderRadius: 2, opacity: 0.75 }} />
+                      <div style={{ height: 3, background: "rgba(255,255,255,0.05)", borderRadius: 2 }}>
+                        <div style={{ height: "100%", width: `${v}%`, background: TIER_COLORS[s.tier], borderRadius: 2, opacity: 0.8, boxShadow: `0 0 8px ${TIER_COLORS[s.tier]}66` }} />
                       </div>
                     </div>
                   ))}
@@ -381,11 +377,11 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
 
                 {evidence.length > 0 && (
                   <div style={{ borderTop: `1px solid ${T.glassBorder}`, paddingTop: 22, marginBottom: 22 }}>
-                    <div style={{ ...eyebrow(T.gold), marginBottom: 12 }}>EVIDENCE CITED</div>
+                    <div style={{ ...eyebrow(T.violet), marginBottom: 12 }}>EVIDENCE CITED</div>
                     <div style={{ display: "grid", gap: 7 }}>
                       {evidence.map((sig) => (
                         <div key={sig.id} style={{ fontSize: 12.5, color: T.textSecondary, lineHeight: 1.5 }}>
-                          <span style={{ fontFamily: FONT.mono, fontSize: 10, color: T.gold }}>{sig.id}</span>{" "}
+                          <span style={{ fontFamily: FONT.mono, fontSize: 10, color: T.violet }}>{sig.id}</span>{" "}
                           {sig.url ? (
                             <a href={sig.url} target="_blank" rel="noreferrer" style={{ color: T.textPrimary, textDecoration: "none", borderBottom: `1px solid ${T.glassBorderStrong}` }}>{sig.title} ↗</a>
                           ) : (
@@ -418,8 +414,8 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
       )}
 
       {view === "Strategy" && (
-        <div style={{ animation: "fadeUp 350ms ease" }}>
-          <div style={{ ...card, padding: 30, overflowX: "auto" }}>
+        <div style={{ animation: "fadeUp 400ms both" }}>
+          <div className="glass" style={{ padding: 30, overflowX: "auto" }}>
             <table style={{ borderCollapse: "separate", borderSpacing: 3, width: "100%" }}>
               <thead>
                 <tr>
@@ -435,11 +431,11 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
                     <td style={{ padding: "10px 10px", fontSize: 13, color: T.textPrimary, whiteSpace: "nowrap" }}>{row.businessUnit}</td>
                     {row.scores.map((score, i) => {
                       const type = row.types[i];
-                      const hue = type === "opp" ? T.green : type === "threat" ? T.red : T.textMuted;
-                      const alpha = type === "mon" ? 0.06 : 0.07 + score * 0.055;
+                      const hue = type === "opp" ? T.mint : type === "threat" ? T.coral : T.textMuted;
+                      const alpha = type === "mon" ? 0.06 : 0.08 + score * 0.055;
                       return (
                         <td key={i} style={{
-                          padding: "10px 6px", textAlign: "center", borderRadius: 4,
+                          padding: "10px 6px", textAlign: "center", borderRadius: 6,
                           background: `${hue}${Math.round(alpha * 255).toString(16).padStart(2, "0")}`,
                           fontFamily: FONT.mono, fontSize: 11.5, color: type === "mon" ? T.textMuted : hue,
                           fontVariantNumeric: "tabular-nums",
@@ -454,9 +450,9 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
             </table>
           </div>
           <div style={{ display: "flex", gap: 24, marginTop: 16, paddingLeft: 4 }}>
-            {[["OPPORTUNITY", T.green], ["THREAT", T.red], ["MONITOR", T.textMuted]].map(([label, color]) => (
+            {[["OPPORTUNITY", T.mint], ["THREAT", T.coral], ["MONITOR", T.textMuted]].map(([label, color]) => (
               <span key={label} style={{ display: "flex", alignItems: "center", gap: 7, ...eyebrow(color as string, 9) }}>
-                <span style={{ width: 9, height: 9, borderRadius: 2, background: `${color}44` }} />
+                <span style={{ width: 9, height: 9, borderRadius: 3, background: `${color}44` }} />
                 {label}
               </span>
             ))}
@@ -466,20 +462,20 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
       )}
 
       {view === "Timeline" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18, animation: "fadeUp 350ms ease" }}>
-          {(["now", "monitor", "prepare"] as const).map((lane) => {
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
+          {(["now", "monitor", "prepare"] as const).map((lane, laneIdx) => {
             const items = scan.timeline.filter((t) => t.lane === lane);
             const captions = { now: "Evidence strong. Fund and build.", monitor: "Track the leading indicators.", prepare: "Scenario-dependent capabilities." };
             return (
-              <div key={lane}>
+              <div key={lane} style={{ animation: `fadeUp 450ms ${laneIdx * 100}ms both` }}>
                 <div style={{ borderBottom: `2px solid ${LANE_COLORS[lane]}66`, paddingBottom: 10, marginBottom: 14 }}>
                   <div style={{ ...eyebrow(LANE_COLORS[lane], 11) }}>{lane === "now" ? "NOW" : lane === "monitor" ? "MONITOR" : "PREPARE FOR"}</div>
                   <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{captions[lane]}</div>
                 </div>
                 <div style={{ display: "grid", gap: 9 }}>
                   {items.map((t, i) => (
-                    <button key={i} onClick={() => { setView("Scenarios"); setSelectedScenario(t.scenarioId); }}
-                      style={{ ...card, padding: "13px 15px", cursor: "pointer", textAlign: "left", borderLeft: `2px solid ${LANE_COLORS[lane]}55` }}>
+                    <button key={i} className="glass--flat lift-sm" onClick={() => { setView("Scenarios"); setSelectedScenario(t.scenarioId); }}
+                      style={{ padding: "13px 15px", cursor: "pointer", textAlign: "left", borderLeft: `2px solid ${LANE_COLORS[lane]}66` }}>
                       <div style={{ fontFamily: FONT.mono, fontSize: 9, color: T.textMuted, marginBottom: 5, letterSpacing: 1 }}>{t.year} · S{t.scenarioId}</div>
                       <div style={{ fontSize: 12.5, color: T.textPrimary, lineHeight: 1.45 }}>{t.label}</div>
                     </button>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { BrandConfig, CostEstimate, ScanScope } from "@horizon/shared";
-import { T, FONT, card, eyebrow, goldButton, inputStyle } from "../theme.js";
+import { T, FONT, eyebrow, inputStyle, primaryButton } from "../theme.js";
 import { api } from "../api.js";
 
 const DEFAULT_SCOPE: ScanScope = {
@@ -16,7 +16,7 @@ function Slider({ label, value, min, max, onChange }: { label: string; value: nu
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
         <span style={{ ...eyebrow(T.textSecondary) }}>{label}</span>
-        <span style={{ fontFamily: FONT.mono, fontSize: 13, color: T.gold, fontVariantNumeric: "tabular-nums" }}>{value}</span>
+        <span style={{ fontFamily: FONT.mono, fontSize: 13, color: T.violet, fontVariantNumeric: "tabular-nums" }}>{value}</span>
       </div>
       <input type="range" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} style={{ width: "100%", display: "block" }} />
     </div>
@@ -56,16 +56,16 @@ export function ScanLauncher({ brands, onScanStarted }: { brands: BrandConfig[];
 
   return (
     <div style={{ animation: "fadeUp 400ms ease" }}>
-      <div style={{ ...eyebrow(T.gold), marginBottom: 10 }}>MISSION CONTROL</div>
+      <div style={{ ...eyebrow(T.violet), marginBottom: 10 }}>MISSION CONTROL</div>
       <h1 style={{ fontFamily: FONT.display, fontSize: 40, fontWeight: 400, color: T.textHeading, margin: "0 0 6px" }}>
-        Launch a scan{brand ? <> for <span style={{ fontStyle: "italic", color: T.gold }}>{brand.name}</span></> : ""}
+        Launch a scan{brand ? <> for <span style={{ fontStyle: "italic", color: T.violet }}>{brand.name}</span></> : ""}
       </h1>
       <p style={{ fontSize: 13, color: T.textSecondary, margin: "0 0 32px" }}>
         Scope the scan on the left; the projected cost answers on the right, before anything is spent.
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(340px, 7fr) minmax(300px, 5fr)", gap: 20, alignItems: "start" }}>
-        <div style={{ ...card, padding: 32, display: "grid", gap: 24 }}>
+        <div className="glass" style={{ padding: 32, display: "grid", gap: 24, animation: "fadeUp 450ms 60ms both" }}>
           <div>
             <label style={{ ...eyebrow(T.textSecondary), display: "block", marginBottom: 7 }}>Brand</label>
             <select value={brandId} onChange={(e) => setBrandId(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
@@ -86,19 +86,21 @@ export function ScanLauncher({ brands, onScanStarted }: { brands: BrandConfig[];
           </label>
 
           <div>
-            <button onClick={start} disabled={starting || !brandId} style={{ ...goldButton, opacity: starting || !brandId ? 0.45 : 1 }}>
+            <button className="btn-primary" onClick={start} disabled={starting || !brandId} style={{ ...primaryButton, opacity: starting || !brandId ? 0.45 : 1 }}>
               {starting ? "STARTING…" : "RUN SCAN →"}
             </button>
-            {startError && <div style={{ marginTop: 12, fontSize: 12, color: T.red, lineHeight: 1.55 }}>{startError}</div>}
+            {startError && <div style={{ marginTop: 12, fontSize: 12, color: T.coral, lineHeight: 1.55 }}>{startError}</div>}
           </div>
         </div>
 
-        <div style={{ ...card, padding: 28, position: "sticky", top: 84 }}>
+        <div className="glass--strong" style={{ padding: 28, position: "sticky", top: 84, animation: "fadeUp 450ms 140ms both" }}>
           <div style={{ ...eyebrow(), marginBottom: 18 }}>PROJECTED COST</div>
           {estimate ? (
             <>
-              <div style={{ fontFamily: FONT.mono, fontSize: 30, color: T.gold, marginBottom: 4, fontVariantNumeric: "tabular-nums", letterSpacing: -0.5 }}>
-                ${estimate.lowUsd.toFixed(2)}<span style={{ color: T.textMuted, fontSize: 20 }}> – </span>${estimate.highUsd.toFixed(2)}
+              <div style={{ fontFamily: FONT.mono, fontSize: 30, marginBottom: 4, fontVariantNumeric: "tabular-nums", letterSpacing: -0.5,
+                background: `linear-gradient(90deg, ${T.blue}, ${T.violet}, ${T.pink})`,
+                WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
+                ${estimate.lowUsd.toFixed(2)} – ${estimate.highUsd.toFixed(2)}
               </div>
               <div style={{ fontSize: 10.5, color: T.textMuted, marginBottom: 22 }}>
                 range = retrieval yield × LLM output variance
@@ -113,13 +115,13 @@ export function ScanLauncher({ brands, onScanStarted }: { brands: BrandConfig[];
                         ${s.lowUsd.toFixed(3)}–${s.highUsd.toFixed(3)}
                       </span>
                     </div>
-                    <div style={{ height: 3, background: T.bgPrimary, borderRadius: 2, overflow: "hidden" }}>
+                    <div style={{ height: 3, background: "rgba(255,255,255,0.05)", borderRadius: 2, overflow: "hidden" }}>
                       <div style={{
                         height: "100%",
                         width: `${Math.max((s.highUsd / maxHigh) * 100, 1.5)}%`,
-                        background: `linear-gradient(90deg, ${T.gold}CC, ${T.gold}55)`,
+                        background: `linear-gradient(90deg, ${T.blue}, ${T.violet}, ${T.pink})`,
                         borderRadius: 2,
-                        transition: "width 350ms ease",
+                        transition: "width 380ms cubic-bezier(0.2, 0.8, 0.2, 1)",
                       }} />
                     </div>
                   </div>
