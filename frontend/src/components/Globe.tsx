@@ -188,7 +188,8 @@ export function Globe({ signals, size = 460 }: { signals: Signal[]; size?: numbe
       const rect = canvas.getBoundingClientRect();
       if (s.dragging) {
         s.rotY += (e.clientX - s.lastX) * 0.005;
-        s.tilt = Math.max(-1.2, Math.min(1.2, s.tilt - (e.clientY - s.lastY) * 0.004));
+        // Vertical drag inverted: pulling down tips the globe's north toward you.
+        s.tilt = Math.max(-1.2, Math.min(1.2, s.tilt + (e.clientY - s.lastY) * 0.004));
         s.lastX = e.clientX;
         s.lastY = e.clientY;
         s.idleAt = performance.now();
