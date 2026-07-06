@@ -13,6 +13,11 @@ export interface Providers {
   search: SearchProvider;
   embedding: EmbeddingProvider;
   llm: LlmProvider;
+  /** Whether a real embedding provider is configured. When false, the
+   * dedupe/cluster stage groups signals with the LLM instead of embeddings --
+   * so the pipeline needs no separate embeddings vendor (Anthropic offers no
+   * embeddings API; Voyage was the recommended pairing but is optional). */
+  embeddingsAvailable: boolean;
 }
 
 export function buildProviders(): Providers {
@@ -20,6 +25,7 @@ export function buildProviders(): Providers {
     search: buildSearchProvider(),
     embedding: buildEmbeddingProvider(),
     llm: buildLlmProvider(),
+    embeddingsAvailable: Boolean(process.env.VOYAGE_API_KEY),
   };
 }
 

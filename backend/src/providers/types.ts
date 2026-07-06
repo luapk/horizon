@@ -15,7 +15,7 @@ export interface SearchProvider {
   search(query: string, maxResults: number, options?: SearchOptions): Promise<{ results: SearchResult[]; calls: number }>;
 }
 
-export type LlmResponseKind = "query-design" | "signal-extract" | "gap-analysis" | "cluster-name" | "driver-synth" | "scenario-gen" | "matrix-gen" | "freeform";
+export type LlmResponseKind = "query-design" | "signal-extract" | "gap-analysis" | "cluster-dedupe" | "cluster-group" | "cluster-name" | "driver-synth" | "scenario-gen" | "matrix-gen" | "freeform";
 
 export interface LlmCompletionRequest {
   system: string;

@@ -61,10 +61,15 @@ version:
   can't come from single-document extraction by definition. A dedicated
   LLM pass reasons over the whole deduped corpus, and its outputs are
   marked as derived (never "Verified") with the signal IDs that imply them.
-- **Clusters from embeddings, not LLM free-association** -- clusters are
+- **Clusters from embeddings when available, LLM grouping otherwise** -- when
+  an embeddings provider is configured (`VOYAGE_API_KEY`), clusters are
   proposed by greedy agglomerative clustering over embeddings (a stable,
-  data-driven grouping), and only *named* by an LLM afterward. An LLM never
-  decides cluster membership on its own.
+  data-driven grouping) and only *named* by an LLM afterward. With no
+  embeddings provider, the same stage instead has the LLM assign each signal
+  to a theme in one pass, then validates the assignment (every signal placed
+  exactly once, gaps repaired by round-robin) -- so the tool runs on Anthropic
+  alone, with no separate embeddings vendor. Dedupe follows the same
+  either/or: cosine-similarity on embeddings, or an LLM duplicate-grouping pass.
 - **Separates driver synthesis from cluster naming** -- naming a cluster and
   reasoning about the macro force it represents are two different LLM calls
   with two different prompts, so the "why does this matter" reasoning isn't
@@ -151,7 +156,11 @@ via `waitUntil`, up to the function's `maxDuration` of 300s).
    - `SESSION_SECRET` -- long random string (required once API keys are set)
    - `AUTH_PASSWORD_HASH` (bcrypt) or `AUTH_PASSWORD` -- required once API
      keys are set; the `longview` default only applies in keyless mock mode
-   - `ANTHROPIC_API_KEY`, `TAVILY_API_KEY`, `VOYAGE_API_KEY` -- real pipeline
+   - `ANTHROPIC_API_KEY` -- required for real analysis (extraction, clustering,
+     drivers, scenarios). `TAVILY_API_KEY` -- live web search for ingestion.
+     `VOYAGE_API_KEY` -- **optional**; enables embedding-based dedupe/clustering.
+     Without it, the LLM does the grouping, so the pipeline needs only Anthropic
+     + Tavily (Anthropic has no embeddings API of its own).
    - `POSTGRES_URL` (or `DATABASE_URL`) -- attach the Neon integration from
      the Vercel Storage tab; the storage layer switches from SQLite to
      Postgres automatically

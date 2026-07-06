@@ -55,6 +55,13 @@ export class MockLlmProvider implements LlmProvider {
             geo: "Global",
           }],
         });
+      case "cluster-dedupe":
+        // No duplicates flagged -- mock runs keep every extracted signal.
+        return JSON.stringify({ duplicateGroups: [] });
+      case "cluster-group":
+        // Empty assignment -- the caller falls back to round-robin so the
+        // mock still produces non-degenerate clusters without an LLM.
+        return JSON.stringify({ clusters: [] });
       case "cluster-name":
         return JSON.stringify({ label: `[MOCK] Cluster Theme ${h % 97}` });
       case "driver-synth":
