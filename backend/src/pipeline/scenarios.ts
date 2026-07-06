@@ -58,6 +58,7 @@ export async function generateScenarios(
   const tiers = assignTiers(count);
   const signalsById = new Map(signals.map((s) => [s.id, s]));
   const scenarios: Scenario[] = [];
+  const failures: string[] = [];
 
   for (let i = 0; i < count; i++) {
     const chosenDrivers = pickDrivers(drivers, i);
@@ -69,44 +70,59 @@ export async function generateScenarios(
 
     const prompt = `Brand: ${brand.name} (${brand.industry}).\nScenario tier: ${tier} (${tier === "Cassandra" ? "a cautionary/adversarial scenario -- what breaks the brand's current strategy" : tier === "Deep" ? "a longer-horizon, less certain scenario" : "a near-term, well-evidenced scenario"}).\n\nDrivers to weave together:\n${chosenDrivers.map((d) => `- ${d.id} ${d.name}: ${d.desc}`).join("\n")}\n\nEvidence signals (cite these by ID; do not invent facts beyond them):\n${evidenceBlock}`;
 
-    const parsed = await completeJson<{
-      title: string;
-      tagline: string;
-      dispatch: string;
-      shadow: string;
-      killerAssumption: string;
-      confidence: Scenario["confidence"];
-      citedSignalIds: string[];
-      actions: Scenario["actions"];
-      dimensions: Scenario["dimensions"];
-    }>(
-      providers.llm,
-      { system: SYSTEM, prompt, maxTokens: 1600, model: DEFAULT_SYNTHESIS_MODEL, kind: "scenario-gen" },
-      (r) => usage.recordLlm("scenario_generation", r.model, r.inputTokens, r.outputTokens)
-    );
+    // One malformed scenario must never fail the whole scan -- the corpus,
+    // clusters, drivers, and every other scenario have already been paid for.
+    // Skip a bad one and keep the rest.
+    try {
+      const parsed = await completeJson<{
+        title: string;
+        tagline: string;
+        dispatch: string;
+        shadow: string;
+        killerAssumption: string;
+        confidence: Scenario["confidence"];
+        citedSignalIds: string[];
+        actions: Scenario["actions"];
+        dimensions: Scenario["dimensions"];
+      }>(
+        providers.llm,
+        // Room for a 4-6 paragraph dispatch plus the other fields; too tight a
+        // cap truncates the JSON mid-string and the response fails to parse.
+        { system: SYSTEM, prompt, maxTokens: 3200, model: DEFAULT_SYNTHESIS_MODEL, kind: "scenario-gen" },
+        (r) => usage.recordLlm("scenario_generation", r.model, r.inputTokens, r.outputTokens)
+      );
 
-    // Trust the dispatch text over the LLM's self-reported citation list,
-    // and only keep IDs that exist in this scan.
-    const citedInText = new Set([...parsed.dispatch.matchAll(/\[?(S-\d{3})\]?/g)].map((m) => m[1]));
-    for (const id of parsed.citedSignalIds ?? []) citedInText.add(id);
-    const citedSignalIds = [...citedInText].filter((id) => signalsById.has(id));
+      // Trust the dispatch text over the LLM's self-reported citation list,
+      // and only keep IDs that exist in this scan.
+      const citedInText = new Set([...(parsed.dispatch ?? "").matchAll(/\[?(S-\d{3})\]?/g)].map((m) => m[1]));
+      for (const id of parsed.citedSignalIds ?? []) citedInText.add(id);
+      const citedSignalIds = [...citedInText].filter((id) => signalsById.has(id));
 
-    scenarios.push({
-      id: i + 1,
-      tier,
-      title: parsed.title,
-      tagline: parsed.tagline,
-      driverIds: chosenDrivers.map((d) => d.id),
-      // An ungrounded narrative doesn't get to call itself anything better
-      // than Contested, whatever the LLM claimed.
-      confidence: citedSignalIds.length === 0 ? "Contested" : parsed.confidence,
-      dispatch: parsed.dispatch,
-      shadow: parsed.shadow,
-      killerAssumption: parsed.killerAssumption,
-      citedSignalIds,
-      actions: (parsed.actions ?? []).slice(0, 3),
-      dimensions: parsed.dimensions,
-    });
+      scenarios.push({
+        id: scenarios.length + 1,
+        tier,
+        title: parsed.title,
+        tagline: parsed.tagline,
+        driverIds: chosenDrivers.map((d) => d.id),
+        // An ungrounded narrative doesn't get to call itself anything better
+        // than Contested, whatever the LLM claimed.
+        confidence: citedSignalIds.length === 0 ? "Contested" : parsed.confidence,
+        dispatch: parsed.dispatch,
+        shadow: parsed.shadow,
+        killerAssumption: parsed.killerAssumption,
+        citedSignalIds,
+        actions: (parsed.actions ?? []).slice(0, 3),
+        dimensions: parsed.dimensions,
+      });
+    } catch (err) {
+      failures.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // Only surface as a hard failure if we couldn't produce a single scenario --
+  // otherwise a partial set is a usable dossier, not a wasted scan.
+  if (scenarios.length === 0 && failures.length > 0) {
+    throw new Error(`all ${failures.length} scenarios failed to generate: ${failures[0]}`);
   }
 
   return scenarios;

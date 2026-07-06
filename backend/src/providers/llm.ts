@@ -133,14 +133,48 @@ export function buildLlmProvider(): LlmProvider {
 }
 
 /** Anthropic sometimes wraps JSON in prose or markdown fences even when asked
- * for raw JSON -- extract the first {...} or [...] block before parsing. */
+ * for raw JSON -- extract the first {...} or [...] block before parsing. If the
+ * response was truncated (long narrative hit the token cap), try to salvage it
+ * by closing any open string and brackets rather than losing the whole call. */
 export function extractJson<T>(text: string): T {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const candidate = fenced ? fenced[1] : text;
   const start = candidate.search(/[[{]/);
   if (start === -1) throw new Error(`No JSON found in LLM response: ${text.slice(0, 200)}`);
   const trimmed = candidate.slice(start);
-  return JSON.parse(trimmed) as T;
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch (err) {
+    try {
+      return JSON.parse(repairTruncatedJson(trimmed)) as T;
+    } catch {
+      throw err;
+    }
+  }
+}
+
+/** Best-effort repair of a JSON object/array cut off mid-generation: close an
+ * unterminated string, drop a dangling trailing comma, and close every bracket
+ * still open. Fixes truncation (the common max-tokens case); it can't fix an
+ * unescaped quote inside prose -- that's left to the caller's error handling. */
+function repairTruncatedJson(candidate: string): string {
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (const ch of candidate) {
+    if (escaped) { escaped = false; continue; }
+    if (ch === "\\") { if (inString) escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{" || ch === "[") stack.push(ch);
+    else if (ch === "}" && stack[stack.length - 1] === "{") stack.pop();
+    else if (ch === "]" && stack[stack.length - 1] === "[") stack.pop();
+  }
+  let repaired = candidate;
+  if (inString) repaired += '"';
+  repaired = repaired.replace(/,\s*$/, "");
+  for (let i = stack.length - 1; i >= 0; i--) repaired += stack[i] === "{" ? "}" : "]";
+  return repaired;
 }
 
 /** Complete + parse with one retry on malformed JSON. Every attempt's usage
