@@ -25,7 +25,7 @@ export function CommandPalette({ scan, onGo }: { scan: ScanResult; onGo: (n: Nav
   useEffect(() => { if (open) { setQ(""); setActive(0); setTimeout(() => inputRef.current?.focus(), 20); } }, [open]);
 
   const items = useMemo<Item[]>(() => {
-    const tabs = ["Overview", "Signals", "Drivers", "Scenarios", "Strategy", "Timeline", "Story"];
+    const tabs = ["Summary", "Signals", "Drivers", "Scenarios", "Strategy", "Timeline"];
     const out: Item[] = tabs.map((v) => ({ kind: "TAB", label: v, sub: "Jump to tab", color: T.textSecondary, nav: { view: v } }));
     for (const d of scan.drivers) out.push({ kind: "DRIVER", label: d.name, sub: `${d.id} · ${d.trajectory}`, color: STEEP_COLORS[d.steep] ?? T.violet, nav: { view: "Drivers" } });
     for (const s of scan.scenarios) out.push({ kind: "SCENARIO", label: s.title, sub: `${s.tier} · S${s.id}`, color: TIER_COLORS[s.tier], nav: { view: "Scenarios", scenarioId: s.id } });

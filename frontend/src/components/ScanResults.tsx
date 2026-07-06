@@ -3,17 +3,14 @@ import type { BrandConfig, ScanResult, Signal } from "@horizon/shared";
 import { T, FONT, eyebrow, display, STEEP_COLORS, STEEP_LABELS, TIER_COLORS, LANE_COLORS } from "../theme.js";
 import { api } from "../api.js";
 import { Globe, type Arc } from "./Globe.js";
-import { AnimatedNumber } from "./AnimatedNumber.js";
 import { ScenarioField } from "./ScenarioField.js";
-import { DriverConstellation } from "./DriverConstellation.js";
 import { StoryMode } from "./StoryMode.js";
 import { CommandPalette, type Nav } from "./CommandPalette.js";
-import { executiveSummary } from "../lib/scanSummary.js";
 import { downloadScanPpt } from "../lib/exportPpt.js";
 import { resolveGeo } from "../geo.js";
 import { useIsNarrow } from "../hooks.js";
 
-const NAV = ["Overview", "Signals", "Drivers", "Scenarios", "Strategy", "Timeline", "Story"] as const;
+const NAV = ["Summary", "Signals", "Drivers", "Scenarios", "Strategy", "Timeline"] as const;
 type View = (typeof NAV)[number];
 
 const STAGE_LABELS: Record<string, string> = {
@@ -87,36 +84,9 @@ function SignalCard({ s, index }: { s: Signal; index: number }) {
   );
 }
 
-/** Estimate range bar with the measured actual plotted against it. */
-function CostReconciliation({ scan }: { scan: ScanResult }) {
-  const { estimate, actualCostUsd = 0 } = scan;
-  const scaleMax = Math.max(estimate.highUsd * 1.15, actualCostUsd * 1.15, 0.0001);
-  const pct = (v: number) => `${(v / scaleMax) * 100}%`;
-  const withinRange = actualCostUsd >= estimate.lowUsd && actualCostUsd <= estimate.highUsd;
-  return (
-    <div className="glass" style={{ padding: "22px 26px", animation: "fadeUp 450ms 200ms both" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
-        <span style={{ ...eyebrow() }}>COST · ESTIMATE VS ACTUAL</span>
-        <span style={{ fontFamily: FONT.mono, fontSize: 11, color: withinRange || actualCostUsd < estimate.lowUsd ? T.mint : T.cyan }}>
-          {actualCostUsd === 0 ? "FREE RUN" : withinRange ? "WITHIN ESTIMATE" : actualCostUsd < estimate.lowUsd ? "UNDER ESTIMATE" : "OVER ESTIMATE"}
-        </span>
-      </div>
-      <div style={{ position: "relative", height: 26 }}>
-        <div style={{ position: "absolute", top: 11, left: 0, right: 0, height: 4, background: "rgba(255,255,255,0.05)", borderRadius: 2 }} />
-        <div style={{ position: "absolute", top: 11, left: pct(estimate.lowUsd), width: `calc(${pct(estimate.highUsd)} - ${pct(estimate.lowUsd)})`, height: 4, background: `linear-gradient(90deg, ${T.blue}66, ${T.violet}66, ${T.pink}66)`, borderRadius: 2 }} />
-        <div style={{ position: "absolute", top: 4, left: pct(actualCostUsd), width: 2, height: 18, background: T.mint, boxShadow: `0 0 10px ${T.mint}88`, transform: "translateX(-1px)" }} />
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: FONT.mono, fontSize: 10, color: T.textMuted, fontVariantNumeric: "tabular-nums" }}>
-        <span>est ${estimate.lowUsd.toFixed(2)}–${estimate.highUsd.toFixed(2)}</span>
-        <span style={{ color: T.mint }}>actual ${actualCostUsd.toFixed(3)}</span>
-      </div>
-    </div>
-  );
-}
-
 export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandConfig[] }) {
   const [scan, setScan] = useState<ScanResult | null>(null);
-  const [view, setView] = useState<View>("Overview");
+  const [view, setView] = useState<View>("Summary");
   const [selectedScenario, setSelectedScenario] = useState<number | null>(null);
   const [filter, setFilter] = useState("All");
   const [exporting, setExporting] = useState(false);
@@ -239,63 +209,6 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
         ))}
       </nav>
 
-      {view === "Overview" && (
-        <div style={{ display: "grid", gap: 20 }}>
-          <div className="glass--strong" style={{ padding: "30px 34px", animation: "fadeUp 450ms both" }}>
-            <div style={{ ...eyebrow(T.violet), marginBottom: 16 }}>EXECUTIVE SUMMARY</div>
-            <p style={{ ...display(23, T.textHeading, 500), letterSpacing: -0.4, lineHeight: 1.5, margin: 0, maxWidth: "60ch" }}>
-              {executiveSummary(scan, brandName)}
-            </p>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: narrow ? "repeat(3, 1fr)" : "repeat(6, 1fr)", gap: 14 }}>
-            {[
-              { label: "Signals", value: scan.signals.length, color: T.blue },
-              { label: "Absences", value: absenceCount, color: T.cyan },
-              { label: "Counter-signals", value: counterCount, color: T.rose },
-              { label: "Drivers", value: scan.drivers.length, color: T.violet },
-              { label: "Scenarios", value: scan.scenarios.length, color: T.mint },
-              { label: "Actions", value: scan.timeline.length, color: T.pink },
-            ].map((m, i) => (
-              <div key={m.label} className="glass lift" style={{ padding: "20px 18px 16px", borderTop: `2px solid ${m.color}66`, animation: `fadeUp 450ms ${120 + i * 70}ms both` }}>
-                <div style={{ fontFamily: FONT.mono, fontSize: 46, fontWeight: 700, color: m.color, lineHeight: 0.95, letterSpacing: -2, textShadow: `0 0 28px ${m.color}44` }}>
-                  <AnimatedNumber value={m.value} delay={i * 110} />
-                </div>
-                <div style={{ ...eyebrow(T.textMuted, 9), marginTop: 10 }}>{m.label}</div>
-              </div>
-            ))}
-          </div>
-          <CostReconciliation scan={scan} />
-          <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "1fr 1fr", gap: 20 }}>
-            <div className="glass" style={{ padding: 26, animation: "fadeUp 450ms 280ms both" }}>
-              <div style={{ ...eyebrow(), marginBottom: 16 }}>DRIVERS AT A GLANCE</div>
-              <div style={{ display: "grid", gap: 10 }}>
-                {scan.drivers.map((d) => (
-                  <div key={d.id} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                    <span style={{ fontFamily: FONT.mono, fontSize: 10, color: STEEP_COLORS[d.steep] ?? T.violet, flexShrink: 0 }}>{d.id}</span>
-                    <span style={{ fontSize: 13, color: T.textPrimary, flex: 1 }}>{d.name}</span>
-                    <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: d.trajectory === "Accelerating" ? T.mint : T.cyan, flexShrink: 0 }}>
-                      {d.trajectory === "Accelerating" ? "↑" : "○"} {d.trajectory.toUpperCase()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="glass" style={{ padding: 26, animation: "fadeUp 450ms 360ms both" }}>
-              <div style={{ ...eyebrow(), marginBottom: 16 }}>SCENARIO PORTFOLIO</div>
-              <div style={{ display: "grid", gap: 10 }}>
-                {scan.scenarios.map((s) => (
-                  <button key={s.id} className="lift-sm" onClick={() => { setView("Scenarios"); setSelectedScenario(s.id); }}
-                    style={{ display: "flex", alignItems: "baseline", gap: 10, background: "none", border: "none", borderRadius: 6, cursor: "pointer", padding: "2px 4px", textAlign: "left" }}>
-                    <span style={{ ...eyebrow(TIER_COLORS[s.tier], 9), flexShrink: 0, width: 74 }}>{s.tier}</span>
-                    <span style={{ fontSize: 13, color: T.textPrimary, fontFamily: FONT.body }}>{s.title}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {view === "Signals" && (
         <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "minmax(400px, 5fr) 7fr", gap: 20, alignItems: "start" }}>
           <div className="glass--strong" style={{ padding: "22px 22px 16px", position: narrow ? "static" : "sticky", top: 84, animation: "fadeUp 400ms both" }}>
@@ -334,8 +247,6 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
       )}
 
       {view === "Drivers" && (
-        <div>
-        <DriverConstellation drivers={scan.drivers} />
         <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "1fr 1fr", gap: 16 }}>
           {scan.drivers.map((d, i) => (
             <div key={d.id} className="glass lift" style={{ padding: 26, borderLeft: `3px solid ${STEEP_COLORS[d.steep] ?? T.textMuted}`, animation: `fadeUp 450ms ${i * 80}ms both` }}>
@@ -357,7 +268,6 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
               </div>
             </div>
           ))}
-        </div>
         </div>
       )}
 
@@ -518,7 +428,7 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
         </div>
       )}
 
-      {view === "Story" && <StoryMode scan={scan} brandName={brandName} onGo={goTo} />}
+      {view === "Summary" && <StoryMode scan={scan} brandName={brandName} onGo={goTo} />}
 
       {view === "Timeline" && (
         <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "repeat(3, 1fr)", gap: 18 }}>

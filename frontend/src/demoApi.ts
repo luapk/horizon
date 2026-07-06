@@ -43,7 +43,25 @@ const WORLD_ORIGINS = [
   "United Kingdom", "India", "Brazil", "Germany", "Australia", "Canada",
 ];
 
-function makeSignals(brand: BrandConfig): Signal[] {
+type SignalSeed = { title: string; summary: string; soWhat: string; category: Signal["category"]; type: Signal["type"]; confidence: Signal["confidence"]; surprise: 1 | 2 | 3 };
+
+/** Ten signal archetypes, parameterized by geography/business-unit so the
+ * generator can cycle them to any tier depth (50/100 signals) with plausible
+ * variety -- later rounds are geo-prefixed so titles stay distinct. */
+const SIGNAL_TEMPLATES: Array<(g: string, u: string, rival: string, ind: string) => SignalSeed> = [
+  (g, u, r, ind) => ({ title: `Regulator signals stricter ${ind} disclosure rules`, category: "P", type: "Positive", confidence: "Verified", surprise: 2, summary: `Simulated: a regulator in ${g} has opened consultation on new disclosure requirements affecting ${ind}.`, soWhat: `Compliance becomes a moat for whoever moves first in ${ind}.` }),
+  (g, u, r, ind) => ({ title: `Venture funding surge into ${ind} automation startups`, category: "T", type: "Positive", confidence: "Probable", surprise: 2, summary: `Simulated: funding into ${ind} automation doubled year-on-year, concentrated in ${g}.`, soWhat: `The build-vs-buy window for ${u} tooling is narrowing.` }),
+  (g, u, r, ind) => ({ title: `${r} pilots a subscription model in ${g}`, category: "Ec", type: "Positive", confidence: "Probable", surprise: 3, summary: `Simulated: ${r} is testing recurring-revenue packaging around ${u}.`, soWhat: `If subscriptions stick, lifetime value replaces unit share as the metric that matters.` }),
+  (g, u, r, ind) => ({ title: `Consumer trust survey shows generational split on ${ind}`, category: "S", type: "Negative", confidence: "Verified", surprise: 1, summary: `Simulated: under-30s in ${g} report significantly lower trust in incumbent ${ind} brands than over-50s.`, soWhat: `Brand equity may not transfer to the next customer cohort.` }),
+  (g, u, r, ind) => ({ title: `Supply chain stress test reveals ${ind} single-source risk`, category: "En", type: "Negative", confidence: "Probable", surprise: 2, summary: `Simulated: climate volatility exposed single-source dependencies in ${ind} inputs routed through ${g}.`, soWhat: `Sourcing resilience is becoming a board-level question.` }),
+  (g, u, r, ind) => ({ title: `${g} emerges as lead market for ${u} innovation`, category: "S", type: "Positive", confidence: "Verified", surprise: 3, summary: `Simulated: adoption curves in ${g} run 3-5 years ahead for ${u}-adjacent products.`, soWhat: `What happens in ${g} now is your roadmap preview.` }),
+  (g, u, r, ind) => ({ title: `Open-data mandate could unbundle ${ind} customer lock-in`, category: "P", type: "Negative", confidence: "Contested", surprise: 3, summary: `Simulated: proposed portability rules in ${g} would force ${ind} platforms to open customer data.`, soWhat: `Data moats built on lock-in may be legislated away.` }),
+  (g, u, r, ind) => ({ title: `AI copilots reach production in ${u} workflows`, category: "T", type: "Positive", confidence: "Verified", surprise: 2, summary: `Simulated: multiple firms in ${g} report AI assistance is now standard in ${u} operations.`, soWhat: `The productivity baseline just moved; laggards pay a widening tax.` }),
+  (g, u, r, ind) => ({ title: `Margin compression accelerates in commodity ${ind} segments`, category: "Ec", type: "Negative", confidence: "Verified", surprise: 1, summary: `Simulated: price competition in ${g} is hollowing out undifferentiated ${ind} offerings.`, soWhat: `The middle of the market is where margins go to die.` }),
+  (g, u, r, ind) => ({ title: `Academic labs demonstrate next-gen approach to ${u}`, category: "T", type: "Positive", confidence: "Contested", surprise: 3, summary: `Simulated: early-stage research in ${g} suggests a step-change approach to ${u}, unproven at scale.`, soWhat: `A 5-year watch item that could reset the category if it scales.` }),
+];
+
+function makeSignals(brand: BrandConfig, targetTotal: number): Signal[] {
   const ind = brand.industry;
   const units = brand.businessUnits.length ? brand.businessUnits : ["the core business"];
   const unit = (i: number) => pick(units, i);
@@ -51,31 +69,25 @@ function makeSignals(brand: BrandConfig): Signal[] {
   const geo = (i: number) => geoPool[i % geoPool.length] ?? "Global";
   const rival = brand.competitors[0] ?? "a leading competitor";
 
-  const base: Array<Partial<Signal> & { title: string; summary: string; soWhat: string }> = [
-    { title: `Regulator signals stricter ${ind} disclosure rules`, category: "P", type: "Positive", confidence: "Verified", surprise: 2, summary: `Simulated: a regulator in ${geo(0)} has opened consultation on new disclosure requirements affecting ${ind}.`, soWhat: `Compliance becomes a moat for whoever moves first in ${ind}.` },
-    { title: `Venture funding surge into ${ind} automation startups`, category: "T", type: "Positive", confidence: "Probable", surprise: 2, summary: `Simulated: funding into ${ind} automation doubled year-on-year, concentrated in ${geo(1)}.`, soWhat: `The build-vs-buy window for ${unit(0)} tooling is narrowing.` },
-    { title: `${rival} pilots a subscription model in ${geo(0)}`, category: "Ec", type: "Positive", confidence: "Probable", surprise: 3, summary: `Simulated: ${rival} is testing recurring-revenue packaging around ${unit(0)}.`, soWhat: `If subscriptions stick, lifetime value replaces unit share as the metric that matters.` },
-    { title: `Consumer trust survey shows generational split on ${ind}`, category: "S", type: "Negative", confidence: "Verified", surprise: 1, summary: `Simulated: under-30s report significantly lower trust in incumbent ${ind} brands than over-50s.`, soWhat: `Brand equity may not transfer to the next customer cohort.` },
-    { title: `Supply chain stress test reveals ${ind} single-source risk`, category: "En", type: "Negative", confidence: "Probable", surprise: 2, summary: `Simulated: climate volatility exposed single-source dependencies in ${ind} inputs.`, soWhat: `Sourcing resilience is becoming a board-level question.` },
-    { title: `${geo(1)} emerges as lead market for ${unit(0)} innovation`, category: "S", type: "Positive", confidence: "Verified", surprise: 3, summary: `Simulated: adoption curves in ${geo(1)} run 3-5 years ahead for ${unit(0)}-adjacent products.`, soWhat: `What happens in ${geo(1)} now is your roadmap preview.` },
-    { title: `Open-data mandate could unbundle ${ind} customer lock-in`, category: "P", type: "Negative", confidence: "Contested", surprise: 3, summary: `Simulated: proposed portability rules would force ${ind} platforms to open customer data.`, soWhat: `Data moats built on lock-in may be legislated away.` },
-    { title: `AI copilots reach production in ${unit(1)} workflows`, category: "T", type: "Positive", confidence: "Verified", surprise: 2, summary: `Simulated: multiple firms report AI assistance is now standard in ${unit(1)} operations.`, soWhat: `The productivity baseline just moved; laggards pay a widening tax.` },
-    { title: `Margin compression accelerates in commodity ${ind} segments`, category: "Ec", type: "Negative", confidence: "Verified", surprise: 1, summary: `Simulated: price competition is hollowing out undifferentiated ${ind} offerings.`, soWhat: `The middle of the market is where margins go to die.` },
-    { title: `Academic labs demonstrate next-gen approach to ${unit(0)}`, category: "T", type: "Positive", confidence: "Contested", surprise: 3, summary: `Simulated: early-stage research suggests a step-change approach to ${unit(0)}, unproven at scale.`, soWhat: `A 5-year watch item that could reset the category if it scales.` },
-  ];
-
-  const signals: Signal[] = base.map((s, i) => ({
-    id: `S-${String(i + 1).padStart(3, "0")}`,
-    title: s.title,
-    geo: geo(i),
-    category: s.category as Signal["category"],
-    surprise: (s.surprise ?? 2) as Signal["surprise"],
-    confidence: s.confidence as Signal["confidence"],
-    type: s.type as Signal["type"],
-    source: "Demo corpus (simulated)",
-    summary: s.summary,
-    soWhat: s.soWhat,
-  }));
+  const baseCount = Math.max(10, targetTotal - 2); // leave room for the 2 gap-analysis signals
+  const signals: Signal[] = [];
+  for (let i = 0; i < baseCount; i++) {
+    const g = geo(i);
+    const s = SIGNAL_TEMPLATES[i % SIGNAL_TEMPLATES.length](g, unit(i), rival, ind);
+    signals.push({
+      id: `S-${String(i + 1).padStart(3, "0")}`,
+      // Later template rounds get a geo prefix so titles stay distinct.
+      title: i < SIGNAL_TEMPLATES.length ? s.title : `${g}: ${s.title}`,
+      geo: g,
+      category: s.category,
+      surprise: s.surprise,
+      confidence: s.confidence,
+      type: s.type,
+      source: "Demo corpus (simulated)",
+      summary: s.summary,
+      soWhat: s.soWhat,
+    });
+  }
 
   signals.push({
     id: `S-${String(signals.length + 1).padStart(3, "0")}`,
@@ -105,7 +117,7 @@ function makeSignals(brand: BrandConfig): Signal[] {
   return signals;
 }
 
-function makeScenarios(brand: BrandConfig, count: number, signals: Signal[]): Scenario[] {
+function makeScenarios(brand: BrandConfig, count: number, signals: Signal[], driverCount: number): Scenario[] {
   const tiers: Scenario["tier"][] = [];
   const probable = Math.max(1, Math.round(count * 0.55));
   const cassandra = count >= 4 ? 1 : 0;
@@ -120,7 +132,7 @@ function makeScenarios(brand: BrandConfig, count: number, signals: Signal[]): Sc
       tier,
       title: `${tier === "Cassandra" ? "The Backlash" : tier === "Deep" ? "The Long Shift" : "The Near Future"} ${i + 1}: ${brand.industry} rewired`,
       tagline: `A simulated ${tier.toLowerCase()} scenario for ${brand.name} -- run a real scan for live analysis.`,
-      driverIds: [`D-0${(i % 3) + 1}`],
+      driverIds: [`D-${String((i % driverCount) + 1).padStart(2, "0")}`],
       confidence: tier === "Cassandra" ? "Contested" : "Probable",
       dispatch: `This is simulated demo prose, generated in your browser without any live research.\n\nIn a real scan, this dispatch is a grounded narrative in which every concrete fact is cited from evidence signals like ${cited[0]} and ${cited[1]}, with the citations validated against the scan corpus and rendered as clickable sources below.\n\nThe demo exists to show the shape of the product: signals feed clusters, clusters feed drivers, drivers feed scenarios like this one, and scenarios feed the strategy matrix and action timeline [${cited[2]}].`,
       shadow: "Simulated downside: every scenario in the real product carries an explicit shadow side.",
@@ -153,57 +165,74 @@ async function simulateScan(scan: ScanResult, brand: BrandConfig): Promise<void>
     });
   };
 
+  // The tier's document budget sets how many signals the demo generates,
+  // mirroring how the real pipeline's yield scales with corpus size.
+  const docBudget = scope.sourceQueries * scope.docsPerQuery;
+  const targetTotal = Math.max(12, Math.min(100, docBudget));
+  const dupesRemoved = Math.max(2, Math.round(targetTotal * 0.06));
+
   push("query_design", "done", "simulated");
   push("ingest", "in_progress");
   await sleep(700);
-  push("ingest", "done", `${scope.sourceQueries * 3} documents retrieved (simulated)`);
+  push("ingest", "done", `${docBudget} documents retrieved (simulated)`);
   push("extract", "in_progress");
   await sleep(900);
 
-  const signals = makeSignals(brand);
-  push("extract", "done", `${signals.length - 2} signals extracted (simulated)`);
+  const signals = makeSignals(brand, targetTotal);
+  push("extract", "done", `${signals.length - 2 + dupesRemoved} signals extracted (simulated)`);
   push("dedupe_cluster", "in_progress");
   await sleep(600);
-  push("dedupe_cluster", "done", "2 duplicates removed (simulated)");
+  push("dedupe_cluster", "done", `${dupesRemoved} duplicates removed (simulated)`);
   push("gap_analysis", "in_progress");
   await sleep(700);
   push("gap_analysis", "done", "1 absence + 1 counter-signal derived (simulated)");
   await sleep(500);
 
   const clusterDefs = [
-    { label: "Technology Acceleration", cat: "T" },
-    { label: "Regulatory Tightening", cat: "P" },
-    { label: "Market Restructuring", cat: "Ec" },
+    { label: "Technology Acceleration", name: "The Capability Race", cat: "T" },
+    { label: "Regulatory Tightening", name: "The Compliance Moat", cat: "P" },
+    { label: "Market Restructuring", name: "The Margin Squeeze", cat: "Ec" },
+    { label: "Trust Realignment", name: "The Cohort Cliff", cat: "S" },
+    { label: "Resilience Pressure", name: "The Sourcing Reckoning", cat: "En" },
+    { label: "Revenue Model Shift", name: "The Subscription Turn", cat: "Ec" },
+    { label: "Data Openness", name: "The Unbundling", cat: "P" },
+    { label: "Automation Baseline", name: "The Productivity Reset", cat: "T" },
+    { label: "Lead-Market Divergence", name: "The Geography Split", cat: "S" },
+    { label: "Frontier Research", name: "The Long Bet", cat: "T" },
+    { label: "Commodity Pressure", name: "The Hollow Middle", cat: "Ec" },
+    { label: "Adoption Reality Gap", name: "The Hype Correction", cat: "S" },
   ];
-  const clusters = clusterDefs.map((c, i) => ({
-    id: `C-0${i + 1}`,
+  const driverN = Math.min(Math.max(scope.driverCount, 3), clusterDefs.length);
+  const clusters = clusterDefs.slice(0, driverN).map((c, i) => ({
+    id: `C-${String(i + 1).padStart(2, "0")}`,
     label: c.label,
-    signalIds: signals.filter((_, idx) => idx % 3 === i).map((s) => s.id),
+    signalIds: signals.filter((_, idx) => idx % driverN === i).map((s) => s.id),
     method: "embedding" as const,
-    coherence: 0.62 + i * 0.07,
+    coherence: 0.58 + ((i * 7) % 30) / 100,
   }));
   const drivers = clusters.map((c, i) => ({
-    id: `D-0${i + 1}`,
-    name: ["The Capability Race", "The Compliance Moat", "The Margin Squeeze"][i],
+    id: `D-${String(i + 1).padStart(2, "0")}`,
+    name: clusterDefs[i].name,
     desc: `Simulated driver synthesized from cluster "${c.label}" -- in a real scan this is an LLM synthesis of the structural force the cluster's signals reveal for ${brand.name}.`,
     steep: clusterDefs[i].cat as never,
-    trajectory: (["Accelerating", "Nascent", "Accelerating"] as const)[i],
+    trajectory: (i % 3 === 1 ? "Nascent" : "Accelerating") as "Accelerating" | "Nascent",
     signalIds: c.signalIds,
     clusterIds: [c.id],
   }));
-  // Cross-link drivers so the constellation shows shared-signal edges (a real
-  // 9-driver scan is far denser; this keeps the demo's 3 from looking isolated).
-  if (drivers.length === 3 && signals.length >= 3) {
-    drivers[0].signalIds = [...drivers[0].signalIds, signals[1].id];
-    drivers[1].signalIds = [...drivers[1].signalIds, signals[2].id];
-    drivers[2].signalIds = [...drivers[2].signalIds, signals[0].id];
+  // Ring cross-link: each driver shares one signal with its neighbor, so the
+  // network reads as connected the way a real corpus does.
+  for (let i = 0; i < drivers.length; i++) {
+    const donor = drivers[(i + 1) % drivers.length];
+    if (donor.signalIds[0] && !drivers[i].signalIds.includes(donor.signalIds[0])) {
+      drivers[i].signalIds = [...drivers[i].signalIds, donor.signalIds[0]];
+    }
   }
 
   push("driver_synthesis", "done", `${drivers.length} drivers synthesized (simulated)`);
   push("scenario_generation", "in_progress");
   await sleep(1100);
 
-  const scenarios = makeScenarios(brand, scope.scenarioCount, signals);
+  const scenarios = makeScenarios(brand, scope.scenarioCount, signals, drivers.length);
   push("scenario_generation", "done", `${scenarios.length} scenarios generated (simulated)`);
   push("matrix_timeline", "in_progress");
   await sleep(500);

@@ -96,7 +96,7 @@ export default function App() {
             </button>
           </div>
         ) : (
-          <ScanLauncher brands={brands} onScanStarted={setActiveScanId} />
+          <ScanLauncher brands={brands} onScanStarted={setActiveScanId} onNewBrand={() => setShowBrandForm(true)} />
         )}
       </main>
     </div>
