@@ -2,6 +2,7 @@ import { useState } from "react";
 import { T, FONT } from "../theme.js";
 import { api, IS_DEMO } from "../api.js";
 import { GrainOverlay } from "./GrainOverlay.js";
+import { LONGVIEW_LOGO } from "../logo.js";
 
 export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [password, setPassword] = useState("");
@@ -28,13 +29,7 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
       <div className="orb orb--pink" />
       <GrainOverlay />
       <div className="glass--strong" style={{ position: "relative", zIndex: 1, textAlign: "center", animation: "fadeUp 600ms ease", padding: "56px 64px", borderRadius: 20 }}>
-        <div style={{
-          fontFamily: FONT.mono, fontSize: 19, fontWeight: 700, letterSpacing: 10, marginBottom: 10,
-          background: `linear-gradient(90deg, ${T.blue}, ${T.violet}, ${T.pink})`,
-          WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
-        }}>
-          HORIZON
-        </div>
+        <img src={LONGVIEW_LOGO} alt="Longview" style={{ height: 48, width: "auto", display: "block", margin: "0 auto 14px" }} />
         <div style={{ fontFamily: FONT.mono, fontSize: 9, color: T.textMuted, letterSpacing: 3.5, marginBottom: 44 }}>
           MULTI-BRAND FUTURES INTELLIGENCE ENGINE
         </div>

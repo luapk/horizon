@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { BrandConfig } from "@horizon/shared";
 import { T, FONT, ghostButtonStyle } from "./theme.js";
 import { api, IS_DEMO } from "./api.js";
+import { LONGVIEW_LOGO } from "./logo.js";
 import { Login } from "./components/Login.js";
 import { BrandForm } from "./components/BrandForm.js";
 import { ScanLauncher } from "./components/ScanLauncher.js";
@@ -47,14 +48,10 @@ export default function App() {
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <button
               onClick={() => { setActiveScanId(null); setShowBrandForm(false); }}
-              style={{
-                background: `linear-gradient(90deg, ${T.blue}, ${T.violet}, ${T.pink})`,
-                WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
-                border: "none", cursor: "pointer", padding: 0,
-                fontFamily: FONT.mono, fontSize: 14, fontWeight: 700, letterSpacing: 6,
-              }}
+              aria-label="Longview — home"
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}
             >
-              HORIZON
+              <img src={LONGVIEW_LOGO} alt="Longview" style={{ height: 26, width: "auto", display: "block" }} />
             </button>
             <div style={{ width: 1, height: 20, background: T.glassBorder }} />
             <span style={{ fontSize: 11, color: T.textMuted, letterSpacing: 0.3 }}>Multi-brand futures intelligence</span>
