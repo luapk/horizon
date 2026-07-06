@@ -34,10 +34,21 @@ function saveBrands(brands: BrandConfig[]): void {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const pick = <T,>(arr: T[], i: number): T => arr[i % arr.length];
 
+/** A futures scan surfaces signals wherever they emerge, not just in the
+ * brand's home markets -- so the simulated corpus spreads across the world
+ * (brand geographies first for relevance, then a diverse global pool), which
+ * also keeps the signal globe populated for a brand that lists only one geo. */
+const WORLD_ORIGINS = [
+  "United States", "Western Europe", "Japan", "South Korea", "China", "Singapore",
+  "United Kingdom", "India", "Brazil", "Germany", "Australia", "Canada",
+];
+
 function makeSignals(brand: BrandConfig): Signal[] {
   const ind = brand.industry;
-  const unit = (i: number) => pick(brand.businessUnits, i);
-  const geo = (i: number) => pick(brand.geographies, i);
+  const units = brand.businessUnits.length ? brand.businessUnits : ["the core business"];
+  const unit = (i: number) => pick(units, i);
+  const geoPool = Array.from(new Set([...brand.geographies, ...WORLD_ORIGINS])).filter(Boolean);
+  const geo = (i: number) => geoPool[i % geoPool.length] ?? "Global";
   const rival = brand.competitors[0] ?? "a leading competitor";
 
   const base: Array<Partial<Signal> & { title: string; summary: string; soWhat: string }> = [
@@ -190,7 +201,8 @@ async function simulateScan(scan: ScanResult, brand: BrandConfig): Promise<void>
   push("matrix_timeline", "in_progress");
   await sleep(500);
 
-  const matrix = brand.businessUnits.map((bu, r) => ({
+  const matrixUnits = brand.businessUnits.length ? brand.businessUnits : ["Core business"];
+  const matrix = matrixUnits.map((bu, r) => ({
     businessUnit: bu,
     scores: scenarios.map((_, c) => ((r * 7 + c * 3) % 4) + 1),
     types: scenarios.map((_, c) => (["opp", "mon", "threat"] as const)[(r + c) % 3]),

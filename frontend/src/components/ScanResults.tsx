@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { BrandConfig, ScanResult, Signal } from "@horizon/shared";
 import { T, FONT, eyebrow, STEEP_COLORS, STEEP_LABELS, TIER_COLORS, LANE_COLORS } from "../theme.js";
 import { api } from "../api.js";
@@ -111,6 +111,16 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
   const [view, setView] = useState<View>("Overview");
   const [selectedScenario, setSelectedScenario] = useState<number | null>(null);
   const [filter, setFilter] = useState("All");
+  const detailRef = useRef<HTMLDivElement>(null);
+
+  // Selecting a scenario opens a full dispatch below the card grid; on tall
+  // grids that lands off-screen, so bring it into view (accounting for the
+  // sticky header via scroll-margin on the panel).
+  useEffect(() => {
+    if (selectedScenario != null) {
+      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [selectedScenario]);
 
   useEffect(() => {
     let cancelled = false;
@@ -337,7 +347,7 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
               .map((id) => scan.signals.find((sig) => sig.id === id))
               .filter((sig): sig is Signal => !!sig);
             return (
-              <div className="glass--strong" style={{ marginTop: 24, padding: "42px 48px", position: "relative", borderColor: `${TIER_COLORS[s.tier]}35`, animation: "slideUp 380ms cubic-bezier(0.2, 0.8, 0.2, 1)" }}>
+              <div ref={detailRef} className="glass--strong" style={{ marginTop: 24, padding: "42px 48px", position: "relative", borderColor: `${TIER_COLORS[s.tier]}35`, scrollMarginTop: 80, animation: "slideUp 380ms cubic-bezier(0.2, 0.8, 0.2, 1)" }}>
                 <button onClick={() => setSelectedScenario(null)} style={{ position: "absolute", top: 18, right: 24, background: "none", border: "none", color: T.textMuted, fontSize: 22, cursor: "pointer", transition: "color 150ms ease" }}>×</button>
                 <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20, flexWrap: "wrap" }}>
                   <div style={{ width: 46, height: 3, background: `linear-gradient(90deg, ${TIER_COLORS[s.tier]}, transparent)`, borderRadius: 2 }} />
