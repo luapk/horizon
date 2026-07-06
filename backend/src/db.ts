@@ -17,6 +17,7 @@ interface Store {
 }
 
 const PG_URL = process.env.POSTGRES_URL ?? process.env.DATABASE_URL;
+export const storageBackend = PG_URL ? "postgres" : "sqlite";
 
 async function buildPgStore(): Promise<Store> {
   const { default: pg } = await import("pg");

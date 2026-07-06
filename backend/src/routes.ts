@@ -3,11 +3,23 @@ import { randomUUID } from "node:crypto";
 import { waitUntil } from "@vercel/functions";
 import { BrandConfig, ScanScope, estimateScanCost, type ScanResult } from "@horizon/shared";
 import { requireAuth, verifyPassword, issueSessionCookie, clearSessionCookie } from "./auth.js";
-import { saveBrand, getBrand, listBrands, saveScan, getScan, listScans } from "./db.js";
+import { saveBrand, getBrand, listBrands, saveScan, getScan, listScans, storageBackend } from "./db.js";
 import { buildProviders } from "./providers/index.js";
 import { runScan } from "./pipeline/run.js";
 
 export const router = Router();
+
+/** Unauthenticated liveness probe that also exercises the storage layer, so
+ * a broken native module or unreachable Postgres surfaces here instead of as
+ * a mystery 500 after login. Reports which backend is active, nothing else. */
+router.get("/health", async (_req, res) => {
+  try {
+    await listBrands();
+    res.json({ ok: true, storage: storageBackend });
+  } catch (err) {
+    res.status(500).json({ ok: false, storage: storageBackend, error: err instanceof Error ? err.message : String(err) });
+  }
+});
 
 router.post("/login", async (req, res) => {
   const { password } = req.body ?? {};
@@ -36,7 +48,7 @@ router.post("/brands", async (req, res) => {
     res.status(400).json({ error: parsed.error.flatten() });
     return;
   }
-  const brand: BrandConfig = { ...parsed.data, id: randomUUID(), createdAt: new Date().toISOString() };
+  const brand = BrandConfig.parse({ ...parsed.data, id: randomUUID(), createdAt: new Date().toISOString() });
   await saveBrand(brand);
   res.status(201).json(brand);
 });
