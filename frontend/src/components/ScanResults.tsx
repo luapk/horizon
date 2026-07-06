@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { BrandConfig, ScanResult, Signal } from "@horizon/shared";
-import { T, FONT, eyebrow, display, STEEP_COLORS, STEEP_LABELS, TIER_COLORS, LANE_COLORS } from "../theme.js";
+import { T, FONT, eyebrow, display, STEEP_COLORS, STEEP_LABELS, STEEP_INFO, ABSENCE_INFO, COUNTER_INFO, TIER_COLORS, LANE_COLORS } from "../theme.js";
 import { api } from "../api.js";
 import { Globe, type Arc } from "./Globe.js";
 import { ScenarioField } from "./ScenarioField.js";
@@ -45,13 +45,20 @@ function Dispatch({ text }: { text: string }) {
 
 function SurpriseDots({ level }: { level: number }) {
   return (
-    <span style={{ fontFamily: FONT.mono, letterSpacing: 2, fontSize: 9 }}>
+    <span data-tip={`Surprise ${level}/3 — how far this sits outside current consensus (3 = genuinely novel)`} style={{ fontFamily: FONT.mono, letterSpacing: 2, fontSize: 9 }}>
       {[1, 2, 3].map((i) => (
         <span key={i} style={{ color: i <= level ? T.violet : T.textMuted }}>●</span>
       ))}
     </span>
   );
 }
+
+const FILTER_TIPS: Record<string, string> = {
+  All: "Every signal in the scan",
+  ...STEEP_INFO,
+  Absence: ABSENCE_INFO,
+  Counter: COUNTER_INFO,
+};
 
 function SignalCard({ s, index }: { s: Signal; index: number }) {
   const isAbsence = s.type === "Absence";
@@ -69,7 +76,7 @@ function SignalCard({ s, index }: { s: Signal; index: number }) {
         <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: T.textMuted, letterSpacing: 1 }}>{s.id} · {s.geo}</span>
         <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <SurpriseDots level={s.surprise} />
-          <span style={{ ...eyebrow(edge, 9) }}>{isAbsence ? "ABSENCE" : isCounter ? "COUNTER" : STEEP_LABELS[s.category] ?? s.category}</span>
+          <span data-tip={isAbsence ? ABSENCE_INFO : isCounter ? COUNTER_INFO : STEEP_INFO[s.category]} style={{ ...eyebrow(edge, 9) }}>{isAbsence ? "ABSENCE" : isCounter ? "COUNTER" : STEEP_LABELS[s.category] ?? s.category}</span>
         </span>
       </div>
       <h4 style={{ fontSize: 13.5, fontWeight: 500, color: T.textHeading, margin: "0 0 6px", lineHeight: 1.35 }}>{s.title}</h4>
@@ -222,7 +229,7 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
           <div>
             <div style={{ display: "flex", gap: 5, marginBottom: 16, flexWrap: "wrap" }}>
               {["All", "S", "T", "Ec", "En", "P", "Absence", "Counter"].map((f) => (
-                <button key={f} className="chip" onClick={() => setFilter(f)} style={{
+                <button key={f} className="chip" data-tip={FILTER_TIPS[f]} onClick={() => setFilter(f)} style={{
                   background: filter === f ? "rgba(179,157,255,0.12)" : "transparent",
                   border: `1px solid ${filter === f ? T.violet + "55" : T.glassBorder}`,
                   color: filter === f ? T.textHeading : T.textMuted,
@@ -253,7 +260,7 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <span style={{ fontFamily: FONT.mono, fontSize: 10.5, color: STEEP_COLORS[d.steep] ?? T.violet, fontWeight: 600, letterSpacing: 1 }}>{d.id}</span>
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <span style={{ ...eyebrow(STEEP_COLORS[d.steep] ?? T.textSecondary, 9) }}>{STEEP_LABELS[d.steep] ?? d.steep}</span>
+                  <span data-tip={STEEP_INFO[d.steep]} style={{ ...eyebrow(STEEP_COLORS[d.steep] ?? T.textSecondary, 9) }}>{STEEP_LABELS[d.steep] ?? d.steep}</span>
                   <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: d.trajectory === "Accelerating" ? T.mint : T.cyan }}>
                     {d.trajectory === "Accelerating" ? "↑" : "○"} {d.trajectory.toUpperCase()}
                   </span>

@@ -48,7 +48,23 @@ export function display(size: number, color = T.textHeading, weight = 700): CSSP
 
 export const STEEP_COLORS: Record<string, string> = { S: T.blue, T: T.violet, Ec: T.pink, En: T.mint, P: T.rose };
 export const STEEP_LABELS: Record<string, string> = { S: "SOCIAL", T: "TECH", Ec: "ECON", En: "ENVIRO", P: "POLICY" };
+/** Rollover copy for the STEEP category codes, shown wherever the
+ * abbreviations appear (filter chips, globe legend, card labels). */
+export const STEEP_INFO: Record<string, string> = {
+  S: "Social — shifting values, demographics and consumer behaviour",
+  T: "Technological — emerging tech and new capability baselines",
+  Ec: "Economic — markets, margins, funding and business models",
+  En: "Environmental — climate, resources and supply-chain resilience",
+  P: "Political — regulation, policy and geopolitics",
+};
+export const ABSENCE_INFO = "Absence signal — something the evidence implies should exist, but nobody in the corpus is doing yet";
+export const COUNTER_INFO = "Counter-signal — credible evidence that cuts against the dominant narrative";
 export const TIER_COLORS: Record<string, string> = { Probable: T.blue, Deep: T.mint, Cassandra: T.pink };
+export const TIER_INFO: Record<string, string> = {
+  Probable: "Probable — the futures the evidence points to most directly; plan for these",
+  Deep: "Deep — less likely but high-consequence futures worth preparing for",
+  Cassandra: "Cassandra — the uncomfortable warning the evidence supports but consensus dismisses",
+};
 export const LANE_COLORS: Record<string, string> = { now: T.mint, monitor: T.cyan, prepare: T.violet };
 
 /** Uppercase mono eyebrow — the system's structural voice. */

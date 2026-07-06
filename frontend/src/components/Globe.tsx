@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Signal } from "@horizon/shared";
-import { T, FONT, STEEP_COLORS, eyebrow } from "../theme.js";
+import { T, FONT, STEEP_COLORS, STEEP_INFO, eyebrow } from "../theme.js";
 import { landDots } from "../landmask.js";
 import { resolveGeo } from "../geo.js";
 
@@ -235,13 +235,13 @@ export function Globe({ signals, size = 460, arcs = [], focus = null }: {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, minHeight: 18 }}>
         <div style={{ display: "flex", gap: 12 }}>
           {categories.map((c) => (
-            <span key={c} style={{ display: "flex", alignItems: "center", gap: 5, fontFamily: FONT.mono, fontSize: 9, letterSpacing: 1.5, color: T.textSecondary }}>
+            <span key={c} data-tip={STEEP_INFO[c]} style={{ display: "flex", alignItems: "center", gap: 5, fontFamily: FONT.mono, fontSize: 9, letterSpacing: 1.5, color: T.textSecondary }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: STEEP_COLORS[c], boxShadow: `0 0 8px ${STEEP_COLORS[c]}66` }} />{c}
             </span>
           ))}
         </div>
         {unplotted.length > 0 && (
-          <span style={{ fontFamily: FONT.mono, fontSize: 9, letterSpacing: 1.5, color: T.textMuted }}>◌ {unplotted.length} GLOBAL / UNMAPPED</span>
+          <span data-tip="Signals tagged Global or without a specific geography — real, but not plottable on the globe" style={{ fontFamily: FONT.mono, fontSize: 9, letterSpacing: 1.5, color: T.textMuted }}>◌ {unplotted.length} GLOBAL / UNMAPPED</span>
         )}
       </div>
     </div>

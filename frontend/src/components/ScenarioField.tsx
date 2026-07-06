@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Scenario } from "@horizon/shared";
-import { T, FONT, eyebrow, TIER_COLORS } from "../theme.js";
+import { T, FONT, eyebrow, TIER_COLORS, TIER_INFO } from "../theme.js";
 
 /** Plots every scenario on a likelihood × impact field. Likelihood is read
  * from tier + confidence; impact from the scenario's own relevance/appeal
@@ -100,7 +100,7 @@ export function ScenarioField({ scenarios, selectedId, onSelect }: {
 
       <div style={{ display: "flex", gap: 18, marginTop: 8 }}>
         {(["Probable", "Deep", "Cassandra"] as const).map((t) => (
-          <span key={t} style={{ display: "flex", alignItems: "center", gap: 6, ...eyebrow(TIER_COLORS[t], 9) }}>
+          <span key={t} data-tip={TIER_INFO[t]} style={{ display: "flex", alignItems: "center", gap: 6, ...eyebrow(TIER_COLORS[t], 9) }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: TIER_COLORS[t] }} />{t}
           </span>
         ))}
