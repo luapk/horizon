@@ -1,7 +1,10 @@
 import { DEFAULT_SYNTHESIS_MODEL, type BrandConfig, type Driver, type Scenario, type ScenarioTier, type Signal } from "@horizon/shared";
-import { completeJson, type Providers, type UsageTracker } from "../providers/index.js";
+import { completeJson, mapWithConcurrency, type Providers, type UsageTracker } from "../providers/index.js";
 
 const MAX_EVIDENCE_SIGNALS_PER_SCENARIO = 12;
+/** How many scenario LLM calls run at once. Enough to collapse wall-clock,
+ * conservative enough to stay well under Anthropic per-minute rate limits. */
+const SCENARIO_CONCURRENCY = 4;
 
 const SYSTEM = `You are a foresight analyst writing one scenario for a strategic futures report. You are given drivers AND the underlying evidence signals with IDs. Ground the narrative in that evidence.
 
@@ -57,10 +60,11 @@ export async function generateScenarios(
 ): Promise<Scenario[]> {
   const tiers = assignTiers(count);
   const signalsById = new Map(signals.map((s) => [s.id, s]));
-  const scenarios: Scenario[] = [];
-  const failures: string[] = [];
 
-  for (let i = 0; i < count; i++) {
+  // Each scenario is an independent LLM call -- generate them concurrently so
+  // wall-clock is the slowest call, not the sum. Sequential generation was the
+  // long pole that pushed scans past the serverless function time limit.
+  const buildOne = async (i: number): Promise<{ index: number; scenario: Scenario }> => {
     const chosenDrivers = pickDrivers(drivers, i);
     const tier = tiers[i] ?? "Probable";
     const evidence = evidenceFor(chosenDrivers, signalsById);
@@ -70,36 +74,34 @@ export async function generateScenarios(
 
     const prompt = `Brand: ${brand.name} (${brand.industry}).\nScenario tier: ${tier} (${tier === "Cassandra" ? "a cautionary/adversarial scenario -- what breaks the brand's current strategy" : tier === "Deep" ? "a longer-horizon, less certain scenario" : "a near-term, well-evidenced scenario"}).\n\nDrivers to weave together:\n${chosenDrivers.map((d) => `- ${d.id} ${d.name}: ${d.desc}`).join("\n")}\n\nEvidence signals (cite these by ID; do not invent facts beyond them):\n${evidenceBlock}`;
 
-    // One malformed scenario must never fail the whole scan -- the corpus,
-    // clusters, drivers, and every other scenario have already been paid for.
-    // Skip a bad one and keep the rest.
-    try {
-      const parsed = await completeJson<{
-        title: string;
-        tagline: string;
-        dispatch: string;
-        shadow: string;
-        killerAssumption: string;
-        confidence: Scenario["confidence"];
-        citedSignalIds: string[];
-        actions: Scenario["actions"];
-        dimensions: Scenario["dimensions"];
-      }>(
-        providers.llm,
-        // Room for a 4-6 paragraph dispatch plus the other fields; too tight a
-        // cap truncates the JSON mid-string and the response fails to parse.
-        { system: SYSTEM, prompt, maxTokens: 3200, model: DEFAULT_SYNTHESIS_MODEL, kind: "scenario-gen" },
-        (r) => usage.recordLlm("scenario_generation", r.model, r.inputTokens, r.outputTokens)
-      );
+    const parsed = await completeJson<{
+      title: string;
+      tagline: string;
+      dispatch: string;
+      shadow: string;
+      killerAssumption: string;
+      confidence: Scenario["confidence"];
+      citedSignalIds: string[];
+      actions: Scenario["actions"];
+      dimensions: Scenario["dimensions"];
+    }>(
+      providers.llm,
+      // Room for a 4-6 paragraph dispatch plus the other fields; too tight a
+      // cap truncates the JSON mid-string and the response fails to parse.
+      { system: SYSTEM, prompt, maxTokens: 3200, model: DEFAULT_SYNTHESIS_MODEL, kind: "scenario-gen" },
+      (r) => usage.recordLlm("scenario_generation", r.model, r.inputTokens, r.outputTokens)
+    );
 
-      // Trust the dispatch text over the LLM's self-reported citation list,
-      // and only keep IDs that exist in this scan.
-      const citedInText = new Set([...(parsed.dispatch ?? "").matchAll(/\[?(S-\d{3})\]?/g)].map((m) => m[1]));
-      for (const id of parsed.citedSignalIds ?? []) citedInText.add(id);
-      const citedSignalIds = [...citedInText].filter((id) => signalsById.has(id));
+    // Trust the dispatch text over the LLM's self-reported citation list,
+    // and only keep IDs that exist in this scan.
+    const citedInText = new Set([...(parsed.dispatch ?? "").matchAll(/\[?(S-\d{3})\]?/g)].map((m) => m[1]));
+    for (const id of parsed.citedSignalIds ?? []) citedInText.add(id);
+    const citedSignalIds = [...citedInText].filter((id) => signalsById.has(id));
 
-      scenarios.push({
-        id: scenarios.length + 1,
+    return {
+      index: i,
+      scenario: {
+        id: i + 1, // provisional; renumbered contiguously after failures drop out
         tier,
         title: parsed.title,
         tagline: parsed.tagline,
@@ -113,17 +115,25 @@ export async function generateScenarios(
         citedSignalIds,
         actions: (parsed.actions ?? []).slice(0, 3),
         dimensions: parsed.dimensions,
-      });
-    } catch (err) {
-      failures.push(err instanceof Error ? err.message : String(err));
-    }
+      },
+    };
+  };
+
+  // A single malformed scenario must never fail the whole scan -- mapWith-
+  // Concurrency collects failures instead of throwing, so the rest survive.
+  const { results, failures } = await mapWithConcurrency(
+    Array.from({ length: count }, (_, i) => i),
+    SCENARIO_CONCURRENCY,
+    (i) => buildOne(i)
+  );
+
+  if (results.length === 0 && failures.length > 0) {
+    throw new Error(`all ${failures.length} scenarios failed to generate: ${failures[0].error}`);
   }
 
-  // Only surface as a hard failure if we couldn't produce a single scenario --
-  // otherwise a partial set is a usable dossier, not a wasted scan.
-  if (scenarios.length === 0 && failures.length > 0) {
-    throw new Error(`all ${failures.length} scenarios failed to generate: ${failures[0]}`);
-  }
-
-  return scenarios;
+  // Restore the tier ordering (probable-first) that concurrency scrambles, then
+  // renumber ids 1..n so any dropped failures don't leave gaps.
+  return results
+    .sort((a, b) => a.index - b.index)
+    .map((r, k) => ({ ...r.scenario, id: k + 1 }));
 }

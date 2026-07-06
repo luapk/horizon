@@ -1,5 +1,7 @@
 import { DEFAULT_SYNTHESIS_MODEL, DEFAULT_EXTRACTION_MODEL, type Signal, type Cluster, type Driver } from "@horizon/shared";
-import { completeJson, type Providers, type UsageTracker } from "../providers/index.js";
+import { completeJson, mapWithConcurrency, type Providers, type UsageTracker } from "../providers/index.js";
+
+const DRIVER_CONCURRENCY = 4;
 
 const NAME_SYSTEM = `Given a list of related strategic signal titles, respond with JSON only: {"label": string} -- a short (3-5 word) evocative name for the cluster of themes they share.`;
 
@@ -12,12 +14,12 @@ export async function synthesizeDrivers(
   usage: UsageTracker
 ): Promise<Driver[]> {
   const signalsById = new Map(signals.map((s) => [s.id, s]));
-  const drivers: Driver[] = [];
 
-  for (let i = 0; i < clusters.length; i++) {
+  // Each cluster's naming + synthesis is independent -- run clusters
+  // concurrently so a scan's driver stage is one call deep, not N.
+  const buildDriver = async (i: number): Promise<{ index: number; driver: Driver }> => {
     const cluster = clusters[i];
     const members = cluster.signalIds.map((id) => signalsById.get(id)).filter((s): s is Signal => !!s);
-    if (members.length === 0) continue;
 
     const { label } = await completeJson<{ label: string }>(
       providers.llm,
@@ -48,16 +50,29 @@ export async function synthesizeDrivers(
     for (const m of members) steepCounts.set(m.category, (steepCounts.get(m.category) ?? 0) + 1);
     const dominantSteep = [...steepCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "T";
 
-    drivers.push({
-      id: `D-${String(i + 1).padStart(2, "0")}`,
-      name: parsed.name,
-      desc: parsed.desc,
-      steep: dominantSteep as Driver["steep"],
-      trajectory: parsed.trajectory,
-      signalIds: cluster.signalIds,
-      clusterIds: [cluster.id],
-    });
+    return {
+      index: i,
+      driver: {
+        id: `D-${String(i + 1).padStart(2, "0")}`,
+        name: parsed.name,
+        desc: parsed.desc,
+        steep: dominantSteep as Driver["steep"],
+        trajectory: parsed.trajectory,
+        signalIds: cluster.signalIds,
+        clusterIds: [cluster.id],
+      },
+    };
+  };
+
+  const populatedIdx = clusters
+    .map((c, i) => ({ i, hasMembers: c.signalIds.some((id) => signalsById.has(id)) }))
+    .filter((c) => c.hasMembers)
+    .map((c) => c.i);
+
+  const { results, failures } = await mapWithConcurrency(populatedIdx, DRIVER_CONCURRENCY, (i) => buildDriver(i));
+  if (results.length === 0 && failures.length > 0) {
+    throw new Error(`all ${failures.length} drivers failed to synthesize: ${failures[0].error}`);
   }
 
-  return drivers;
+  return results.sort((a, b) => a.index - b.index).map((r) => r.driver);
 }
