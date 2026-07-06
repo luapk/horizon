@@ -48,7 +48,7 @@ export function BrandForm({ onCreated }: { onCreated: (brand: BrandConfig) => vo
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", animation: "fadeUp 400ms ease" }}>
       <div style={{ ...eyebrow(T.violet), marginBottom: 10 }}>SCAN TARGET</div>
-      <h1 style={{ fontFamily: FONT.display, fontSize: 34, fontWeight: 400, color: T.textHeading, margin: "0 0 8px" }}>New brand</h1>
+      <h1 style={{ fontFamily: FONT.display, fontSize: 34, fontWeight: 700, color: T.textHeading, margin: "0 0 8px" }}>New brand</h1>
       <p style={{ fontSize: 13, color: T.textSecondary, margin: "0 0 28px", lineHeight: 1.6 }}>
         Everything the pipeline knows about a brand comes from this configuration — queries, business
         units in the strategy matrix, and which sources count as trusted.
@@ -81,7 +81,7 @@ export function BrandForm({ onCreated }: { onCreated: (brand: BrandConfig) => vo
           <input style={inputStyle} value={curatedSources} onChange={(e) => setCuratedSources(e.target.value)} placeholder="petfoodindustry.com, fda.gov, nature.com" />
         </Field>
 
-        {error && <div style={{ color: T.coral, fontSize: 12, lineHeight: 1.5 }}>{error}</div>}
+        {error && <div style={{ color: T.rose, fontSize: 12, lineHeight: 1.5 }}>{error}</div>}
 
         <button className="btn-primary" onClick={submit} disabled={busy || !name || !industry} style={{ ...primaryButton, opacity: busy || !name || !industry ? 0.45 : 1, justifySelf: "start" }}>
           {busy ? "CREATING…" : "CREATE BRAND"}

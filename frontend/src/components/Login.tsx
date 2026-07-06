@@ -43,7 +43,7 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
             autoFocus
             style={{
               background: "rgba(10, 13, 24, 0.65)",
-              border: `1px solid ${error ? T.coral : T.glassBorderStrong}`,
+              border: `1px solid ${error ? T.rose : T.glassBorderStrong}`,
               borderRadius: 8, padding: "13px 20px", fontSize: 13, color: T.textPrimary,
               fontFamily: FONT.mono, letterSpacing: 2, width: 262,
               outline: "none", textAlign: "center", transition: "border-color 300ms ease",
@@ -54,13 +54,13 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
           </button>
         </div>
         {error && (
-          <div style={{ color: T.coral, fontSize: 11, fontFamily: FONT.mono, letterSpacing: 2, marginTop: 14 }}>ACCESS DENIED</div>
+          <div style={{ color: T.rose, fontSize: 11, fontFamily: FONT.mono, letterSpacing: 2, marginTop: 14 }}>ACCESS DENIED</div>
         )}
         <div style={{ marginTop: 48, fontSize: 10, color: T.textMuted, fontFamily: FONT.mono, letterSpacing: 2 }}>
           SIGNALS · CLUSTERS · DRIVERS · SCENARIOS · STRATEGY
         </div>
         {IS_DEMO && (
-          <div style={{ marginTop: 14, fontSize: 10, color: T.peach, fontFamily: FONT.mono, letterSpacing: 1.5 }}>
+          <div style={{ marginTop: 14, fontSize: 10, color: T.cyan, fontFamily: FONT.mono, letterSpacing: 1.5 }}>
             DEMO BUILD · ACCESS CODE: demo · ALL DATA SIMULATED IN-BROWSER
           </div>
         )}

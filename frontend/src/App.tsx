@@ -56,7 +56,7 @@ export default function App() {
             <div style={{ width: 1, height: 20, background: T.glassBorder }} />
             <span style={{ fontSize: 11, color: T.textMuted, letterSpacing: 0.3 }}>Multi-brand futures intelligence</span>
             {IS_DEMO && (
-              <span style={{ fontFamily: FONT.mono, fontSize: 9, letterSpacing: 1.5, color: T.peach, border: `1px solid ${T.peach}35`, borderRadius: 4, padding: "3px 8px" }}>
+              <span style={{ fontFamily: FONT.mono, fontSize: 9, letterSpacing: 1.5, color: T.cyan, border: `1px solid ${T.cyan}35`, borderRadius: 4, padding: "3px 8px" }}>
                 DEMO · SIMULATED DATA
               </span>
             )}
@@ -78,10 +78,9 @@ export default function App() {
           <BrandForm onCreated={(b) => { setBrands((prev) => [...prev, b]); setShowBrandForm(false); }} />
         ) : brands.length === 0 ? (
           <div style={{ maxWidth: 640, margin: "72px auto 0", textAlign: "center", animation: "fadeUp 500ms ease" }}>
-            <h1 style={{ fontFamily: FONT.display, fontSize: 48, fontWeight: 400, color: T.textHeading, lineHeight: 1.12, margin: "0 0 18px", textWrap: "balance" as never }}>
+            <h1 style={{ fontFamily: FONT.display, fontSize: 48, fontWeight: 700, color: T.textHeading, lineHeight: 1.12, margin: "0 0 18px", textWrap: "balance" as never }}>
               Futures intelligence,<br />
               <span style={{
-                fontStyle: "italic",
                 background: `linear-gradient(90deg, ${T.blue}, ${T.violet}, ${T.pink})`,
                 WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
               }}>for any brand.</span>

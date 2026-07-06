@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { BrandConfig, ScanResult, Signal } from "@horizon/shared";
-import { T, FONT, eyebrow, STEEP_COLORS, STEEP_LABELS, TIER_COLORS, LANE_COLORS } from "../theme.js";
+import { T, FONT, eyebrow, display, STEEP_COLORS, STEEP_LABELS, TIER_COLORS, LANE_COLORS } from "../theme.js";
 import { api } from "../api.js";
 import { Globe } from "./Globe.js";
 import { AnimatedNumber } from "./AnimatedNumber.js";
+import { executiveSummary } from "../lib/scanSummary.js";
+import { downloadScanPpt } from "../lib/exportPpt.js";
 
 const NAV = ["Overview", "Signals", "Drivers", "Scenarios", "Strategy", "Timeline"] as const;
 type View = (typeof NAV)[number];
@@ -51,11 +53,11 @@ function SurpriseDots({ level }: { level: number }) {
 function SignalCard({ s, index }: { s: Signal; index: number }) {
   const isAbsence = s.type === "Absence";
   const isCounter = s.type === "Counter-Signal";
-  const edge = isAbsence ? T.peach : isCounter ? T.coral : STEEP_COLORS[s.category] ?? T.textMuted;
+  const edge = isAbsence ? T.cyan : isCounter ? T.rose : STEEP_COLORS[s.category] ?? T.textMuted;
   return (
     <div className="glass--flat lift-sm" style={{
       borderStyle: isAbsence || isCounter ? "dashed" : "solid",
-      borderColor: isAbsence ? `${T.peach}50` : isCounter ? `${T.coral}50` : undefined,
+      borderColor: isAbsence ? `${T.cyan}50` : isCounter ? `${T.rose}50` : undefined,
       borderLeft: `3px ${isAbsence || isCounter ? "dashed" : "solid"} ${edge}`,
       padding: "14px 16px",
       animation: `fadeUp 400ms ${Math.min(index * 40, 400)}ms both`,
@@ -89,7 +91,7 @@ function CostReconciliation({ scan }: { scan: ScanResult }) {
     <div className="glass" style={{ padding: "22px 26px", animation: "fadeUp 450ms 200ms both" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
         <span style={{ ...eyebrow() }}>COST · ESTIMATE VS ACTUAL</span>
-        <span style={{ fontFamily: FONT.mono, fontSize: 11, color: withinRange || actualCostUsd < estimate.lowUsd ? T.mint : T.peach }}>
+        <span style={{ fontFamily: FONT.mono, fontSize: 11, color: withinRange || actualCostUsd < estimate.lowUsd ? T.mint : T.cyan }}>
           {actualCostUsd === 0 ? "FREE RUN" : withinRange ? "WITHIN ESTIMATE" : actualCostUsd < estimate.lowUsd ? "UNDER ESTIMATE" : "OVER ESTIMATE"}
         </span>
       </div>
@@ -111,6 +113,7 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
   const [view, setView] = useState<View>("Overview");
   const [selectedScenario, setSelectedScenario] = useState<number | null>(null);
   const [filter, setFilter] = useState("All");
+  const [exporting, setExporting] = useState(false);
   const detailRef = useRef<HTMLDivElement>(null);
 
   // Selecting a scenario opens a full dispatch below the card grid; on tall
@@ -155,7 +158,7 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
         </div>
         <div className="glass--strong" style={{ padding: "26px 30px", fontFamily: FONT.mono }}>
           {scan.progress.map((p, i) => (
-            <div key={i} style={{ display: "flex", gap: 12, alignItems: "baseline", fontSize: 12, padding: "5px 0", color: p.status === "failed" ? T.coral : p.status === "done" ? T.textSecondary : T.violet, animation: "fadeIn 300ms ease" }}>
+            <div key={i} style={{ display: "flex", gap: 12, alignItems: "baseline", fontSize: 12, padding: "5px 0", color: p.status === "failed" ? T.rose : p.status === "done" ? T.textSecondary : T.violet, animation: "fadeIn 300ms ease" }}>
               <span style={{ width: 14, flexShrink: 0 }}>
                 {p.status === "done" ? "▸" : p.status === "failed" ? "✕" : <span style={{ animation: "pulse 1.2s ease infinite" }}>●</span>}
               </span>
@@ -173,8 +176,8 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
 
   if (scan.status === "failed") {
     return (
-      <div className="glass" style={{ borderColor: `${T.coral}45`, padding: 32, maxWidth: 640, margin: "40px auto 0" }}>
-        <div style={{ ...eyebrow(T.coral), marginBottom: 10 }}>SCAN FAILED</div>
+      <div className="glass" style={{ borderColor: `${T.rose}45`, padding: 32, maxWidth: 640, margin: "40px auto 0" }}>
+        <div style={{ ...eyebrow(T.rose), marginBottom: 10 }}>SCAN FAILED</div>
         <div style={{ color: T.textPrimary, fontSize: 13, lineHeight: 1.6 }}>{scan.error}</div>
         {(scan.actualCostUsd ?? 0) > 0 && (
           <div style={{ marginTop: 12, fontFamily: FONT.mono, fontSize: 11, color: T.textMuted }}>spend before failure: ${scan.actualCostUsd?.toFixed(3)}</div>
@@ -186,18 +189,32 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
   const absenceCount = scan.signals.filter((s) => s.type === "Absence").length;
   const counterCount = scan.signals.filter((s) => s.type === "Counter-Signal").length;
 
+  const onExport = async () => {
+    setExporting(true);
+    try {
+      await downloadScanPpt(scan, brandName);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div style={{ animation: "fadeIn 300ms ease" }}>
-      <div style={{ marginBottom: 4 }}>
-        <div style={{ ...eyebrow(T.violet), marginBottom: 8 }}>SCAN COMPLETE · {new Date(scan.createdAt).toLocaleDateString()}</div>
-        <h1 style={{ fontFamily: FONT.display, fontSize: 38, fontWeight: 400, color: T.textHeading, margin: 0, lineHeight: 1.1 }}>
-          {brandName}<span style={{ color: T.textMuted }}>:</span>{" "}
-          <span style={{
-            fontStyle: "italic",
-            background: `linear-gradient(90deg, ${T.blue}, ${T.violet}, ${T.pink})`,
-            WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
-          }}>the decade ahead</span>
-        </h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 24, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ ...eyebrow(T.violet), marginBottom: 10 }}>SCAN COMPLETE · {new Date(scan.createdAt).toLocaleDateString()}</div>
+          <h1 style={{ ...display(52), margin: 0 }}>
+            {brandName}<span style={{ color: T.textMuted }}>:</span>{" "}
+            <span style={{
+              background: `linear-gradient(90deg, ${T.blue}, ${T.violet}, ${T.pink})`,
+              WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+            }}>the decade ahead</span>
+          </h1>
+        </div>
+        <button className="btn-primary" onClick={onExport} disabled={exporting}
+          style={{ padding: "11px 20px", fontFamily: FONT.mono, fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase", opacity: exporting ? 0.5 : 1, whiteSpace: "nowrap" }}>
+          {exporting ? "BUILDING…" : "↓ DOWNLOAD PPT"}
+        </button>
       </div>
 
       <nav style={{ display: "flex", gap: 0, borderBottom: `1px solid ${T.glassBorder}`, margin: "24px 0 32px" }}>
@@ -210,20 +227,26 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
 
       {view === "Overview" && (
         <div style={{ display: "grid", gap: 20 }}>
+          <div className="glass--strong" style={{ padding: "30px 34px", animation: "fadeUp 450ms both" }}>
+            <div style={{ ...eyebrow(T.violet), marginBottom: 16 }}>EXECUTIVE SUMMARY</div>
+            <p style={{ ...display(23, T.textHeading, 500), letterSpacing: -0.4, lineHeight: 1.5, margin: 0, maxWidth: "60ch" }}>
+              {executiveSummary(scan, brandName)}
+            </p>
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14 }}>
             {[
               { label: "Signals", value: scan.signals.length, color: T.blue },
-              { label: "Absences", value: absenceCount, color: T.peach },
-              { label: "Counter-signals", value: counterCount, color: T.coral },
+              { label: "Absences", value: absenceCount, color: T.cyan },
+              { label: "Counter-signals", value: counterCount, color: T.rose },
               { label: "Drivers", value: scan.drivers.length, color: T.violet },
               { label: "Scenarios", value: scan.scenarios.length, color: T.mint },
               { label: "Actions", value: scan.timeline.length, color: T.pink },
             ].map((m, i) => (
-              <div key={m.label} className="glass lift" style={{ padding: "18px 18px 14px", borderTop: `2px solid ${m.color}66`, animation: `fadeUp 450ms ${i * 70}ms both` }}>
-                <div style={{ fontFamily: FONT.mono, fontSize: 30, fontWeight: 600, color: m.color, lineHeight: 1, textShadow: `0 0 24px ${m.color}44` }}>
+              <div key={m.label} className="glass lift" style={{ padding: "20px 18px 16px", borderTop: `2px solid ${m.color}66`, animation: `fadeUp 450ms ${120 + i * 70}ms both` }}>
+                <div style={{ fontFamily: FONT.mono, fontSize: 46, fontWeight: 700, color: m.color, lineHeight: 0.95, letterSpacing: -2, textShadow: `0 0 28px ${m.color}44` }}>
                   <AnimatedNumber value={m.value} delay={i * 110} />
                 </div>
-                <div style={{ fontSize: 10.5, color: T.textMuted, marginTop: 7, letterSpacing: 0.3 }}>{m.label}</div>
+                <div style={{ ...eyebrow(T.textMuted, 9), marginTop: 10 }}>{m.label}</div>
               </div>
             ))}
           </div>
@@ -236,7 +259,7 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
                   <div key={d.id} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
                     <span style={{ fontFamily: FONT.mono, fontSize: 10, color: STEEP_COLORS[d.steep] ?? T.violet, flexShrink: 0 }}>{d.id}</span>
                     <span style={{ fontSize: 13, color: T.textPrimary, flex: 1 }}>{d.name}</span>
-                    <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: d.trajectory === "Accelerating" ? T.mint : T.peach, flexShrink: 0 }}>
+                    <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: d.trajectory === "Accelerating" ? T.mint : T.cyan, flexShrink: 0 }}>
                       {d.trajectory === "Accelerating" ? "↑" : "○"} {d.trajectory.toUpperCase()}
                     </span>
                   </div>
@@ -298,12 +321,12 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
                 <span style={{ fontFamily: FONT.mono, fontSize: 10.5, color: STEEP_COLORS[d.steep] ?? T.violet, fontWeight: 600, letterSpacing: 1 }}>{d.id}</span>
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                   <span style={{ ...eyebrow(STEEP_COLORS[d.steep] ?? T.textSecondary, 9) }}>{STEEP_LABELS[d.steep] ?? d.steep}</span>
-                  <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: d.trajectory === "Accelerating" ? T.mint : T.peach }}>
+                  <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: d.trajectory === "Accelerating" ? T.mint : T.cyan }}>
                     {d.trajectory === "Accelerating" ? "↑" : "○"} {d.trajectory.toUpperCase()}
                   </span>
                 </div>
               </div>
-              <h3 style={{ fontFamily: FONT.display, fontSize: 23, fontWeight: 400, color: T.textHeading, margin: "0 0 10px" }}>{d.name}</h3>
+              <h3 style={{ fontFamily: FONT.display, fontSize: 23, fontWeight: 700, color: T.textHeading, margin: "0 0 10px" }}>{d.name}</h3>
               <p style={{ fontSize: 13, color: T.textSecondary, lineHeight: 1.65, margin: "0 0 14px" }}>{d.desc}</p>
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                 {d.signalIds.map((sid) => (
@@ -330,8 +353,8 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
                   <span style={{ fontFamily: FONT.mono, fontSize: 9.5, color: T.textMuted }}>S{s.id}</span>
                   <span style={{ ...eyebrow(TIER_COLORS[s.tier], 9) }}>{s.tier === "Cassandra" ? "⚠ CASSANDRA" : s.tier}</span>
                 </div>
-                <h3 style={{ fontFamily: FONT.display, fontSize: 18, fontWeight: 400, color: T.textHeading, margin: "0 0 8px", lineHeight: 1.3 }}>{s.title}</h3>
-                <p style={{ fontSize: 12, color: T.textSecondary, margin: 0, lineHeight: 1.55, fontStyle: "italic" }}>{s.tagline}</p>
+                <h3 style={{ fontFamily: FONT.display, fontSize: 18, fontWeight: 700, color: T.textHeading, margin: "0 0 8px", lineHeight: 1.3 }}>{s.title}</h3>
+                <p style={{ fontSize: 12, color: T.textSecondary, margin: 0, lineHeight: 1.55 }}>{s.tagline}</p>
                 <div style={{ display: "flex", gap: 12, marginTop: 12, fontFamily: FONT.mono, fontSize: 9.5, color: T.textMuted }}>
                   <span>{s.citedSignalIds.length} CITED</span>
                   <span>{s.confidence.toUpperCase()}</span>
@@ -353,20 +376,20 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
                   <div style={{ width: 46, height: 3, background: `linear-gradient(90deg, ${TIER_COLORS[s.tier]}, transparent)`, borderRadius: 2 }} />
                   <span style={{ ...eyebrow(TIER_COLORS[s.tier]) }}>{s.tier === "Cassandra" ? "⚠ CASSANDRA" : s.tier}</span>
                   <span style={{ ...eyebrow() }}>CONFIDENCE: {s.confidence}</span>
-                  {evidence.length === 0 && <span style={{ ...eyebrow(T.coral) }}>UNGROUNDED — NO EVIDENCE CITED</span>}
+                  {evidence.length === 0 && <span style={{ ...eyebrow(T.rose) }}>UNGROUNDED — NO EVIDENCE CITED</span>}
                 </div>
-                <h2 style={{ fontFamily: FONT.display, fontSize: 34, fontWeight: 400, color: T.textHeading, margin: "0 0 4px" }}>{s.title}</h2>
-                <p style={{ fontFamily: FONT.display, fontStyle: "italic", fontSize: 16, color: T.textSecondary, margin: "0 0 26px" }}>{s.tagline}</p>
+                <h2 style={{ fontFamily: FONT.display, fontSize: 34, fontWeight: 700, color: T.textHeading, margin: "0 0 4px" }}>{s.title}</h2>
+                <p style={{ fontFamily: FONT.display, fontSize: 16, color: T.textSecondary, margin: "0 0 26px" }}>{s.tagline}</p>
 
                 <Dispatch text={s.dispatch} />
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, margin: "28px 0" }}>
-                  <div className="glass--flat" style={{ borderColor: `${T.peach}30`, background: `${T.peach}0A`, padding: "16px 18px" }}>
-                    <div style={{ ...eyebrow(T.peach), marginBottom: 8 }}>SHADOW SIDE</div>
+                  <div className="glass--flat" style={{ borderColor: `${T.cyan}30`, background: `${T.cyan}0A`, padding: "16px 18px" }}>
+                    <div style={{ ...eyebrow(T.cyan), marginBottom: 8 }}>SHADOW SIDE</div>
                     <p style={{ fontSize: 12.5, color: T.textPrimary, lineHeight: 1.6, margin: 0 }}>{s.shadow}</p>
                   </div>
-                  <div className="glass--flat" style={{ borderColor: `${T.coral}30`, background: `${T.coral}0A`, padding: "16px 18px" }}>
-                    <div style={{ ...eyebrow(T.coral), marginBottom: 8 }}>KILLER ASSUMPTION</div>
+                  <div className="glass--flat" style={{ borderColor: `${T.rose}30`, background: `${T.rose}0A`, padding: "16px 18px" }}>
+                    <div style={{ ...eyebrow(T.rose), marginBottom: 8 }}>KILLER ASSUMPTION</div>
                     <p style={{ fontSize: 12.5, color: T.textPrimary, lineHeight: 1.6, margin: 0 }}>{s.killerAssumption}</p>
                   </div>
                 </div>
@@ -441,7 +464,7 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
                     <td style={{ padding: "10px 10px", fontSize: 13, color: T.textPrimary, whiteSpace: "nowrap" }}>{row.businessUnit}</td>
                     {row.scores.map((score, i) => {
                       const type = row.types[i];
-                      const hue = type === "opp" ? T.mint : type === "threat" ? T.coral : T.textMuted;
+                      const hue = type === "opp" ? T.mint : type === "threat" ? T.rose : T.textMuted;
                       const alpha = type === "mon" ? 0.06 : 0.08 + score * 0.055;
                       return (
                         <td key={i} style={{
@@ -460,7 +483,7 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
             </table>
           </div>
           <div style={{ display: "flex", gap: 24, marginTop: 16, paddingLeft: 4 }}>
-            {[["OPPORTUNITY", T.mint], ["THREAT", T.coral], ["MONITOR", T.textMuted]].map(([label, color]) => (
+            {[["OPPORTUNITY", T.mint], ["THREAT", T.rose], ["MONITOR", T.textMuted]].map(([label, color]) => (
               <span key={label} style={{ display: "flex", alignItems: "center", gap: 7, ...eyebrow(color as string, 9) }}>
                 <span style={{ width: 9, height: 9, borderRadius: 3, background: `${color}44` }} />
                 {label}

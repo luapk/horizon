@@ -57,8 +57,8 @@ export function ScanLauncher({ brands, onScanStarted }: { brands: BrandConfig[];
   return (
     <div style={{ animation: "fadeUp 400ms ease" }}>
       <div style={{ ...eyebrow(T.violet), marginBottom: 10 }}>MISSION CONTROL</div>
-      <h1 style={{ fontFamily: FONT.display, fontSize: 40, fontWeight: 400, color: T.textHeading, margin: "0 0 6px" }}>
-        Launch a scan{brand ? <> for <span style={{ fontStyle: "italic", color: T.violet }}>{brand.name}</span></> : ""}
+      <h1 style={{ fontFamily: FONT.display, fontSize: 40, fontWeight: 700, color: T.textHeading, margin: "0 0 6px" }}>
+        Launch a scan{brand ? <> for <span style={{ color: T.violet }}>{brand.name}</span></> : ""}
       </h1>
       <p style={{ fontSize: 13, color: T.textSecondary, margin: "0 0 32px" }}>
         Scope the scan on the left; the projected cost answers on the right, before anything is spent.
@@ -89,7 +89,7 @@ export function ScanLauncher({ brands, onScanStarted }: { brands: BrandConfig[];
             <button className="btn-primary" onClick={start} disabled={starting || !brandId} style={{ ...primaryButton, opacity: starting || !brandId ? 0.45 : 1 }}>
               {starting ? "STARTING…" : "RUN SCAN →"}
             </button>
-            {startError && <div style={{ marginTop: 12, fontSize: 12, color: T.coral, lineHeight: 1.55 }}>{startError}</div>}
+            {startError && <div style={{ marginTop: 12, fontSize: 12, color: T.rose, lineHeight: 1.55 }}>{startError}</div>}
           </div>
         </div>
 
