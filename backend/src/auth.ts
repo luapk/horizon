@@ -1,17 +1,30 @@
+import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction } from "express";
 
-const SESSION_SECRET = process.env.SESSION_SECRET;
-const AUTH_PASSWORD_HASH = process.env.AUTH_PASSWORD_HASH;
-const AUTH_PASSWORD = process.env.AUTH_PASSWORD;
 const COOKIE_NAME = "horizon_session";
 
+/** A deployment holding real API keys can spend money, so it must configure
+ * auth explicitly and fails closed if it hasn't. A keyless deployment (mock
+ * providers, nothing to spend or leak) gets starter defaults so the first
+ * Vercel deploy works before any env vars are set: password "longview",
+ * ephemeral session secret (sessions reset on cold start). */
+const HAS_REAL_KEYS = Boolean(process.env.ANTHROPIC_API_KEY);
+
+const SESSION_SECRET =
+  process.env.SESSION_SECRET ?? (HAS_REAL_KEYS ? undefined : randomBytes(32).toString("hex"));
+const AUTH_PASSWORD_HASH = process.env.AUTH_PASSWORD_HASH;
+const AUTH_PASSWORD = process.env.AUTH_PASSWORD ?? (HAS_REAL_KEYS ? undefined : "longview");
+
 if (!SESSION_SECRET) {
-  throw new Error("SESSION_SECRET env var is required (used to sign session cookies)");
+  throw new Error("SESSION_SECRET env var is required when API keys are configured (used to sign session cookies)");
 }
 if (!AUTH_PASSWORD_HASH && !AUTH_PASSWORD) {
-  throw new Error("Set AUTH_PASSWORD_HASH (bcrypt hash, preferred) or AUTH_PASSWORD (plaintext, dev only)");
+  throw new Error("Set AUTH_PASSWORD_HASH (bcrypt hash, preferred) or AUTH_PASSWORD when API keys are configured");
+}
+if (!process.env.AUTH_PASSWORD_HASH && !process.env.AUTH_PASSWORD && !HAS_REAL_KEYS) {
+  console.warn("[auth] no AUTH_PASSWORD configured -- using starter password 'longview' (mock-provider mode only)");
 }
 
 export async function verifyPassword(candidate: string): Promise<boolean> {

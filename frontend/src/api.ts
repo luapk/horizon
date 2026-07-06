@@ -3,7 +3,9 @@ import { demoApi } from "./demoApi.js";
 
 export const IS_DEMO = import.meta.env.VITE_DEMO === "1";
 
-const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8787/api";
+// Same-origin by default: Vercel rewrites /api/* to the serverless backend,
+// and the Vite dev server proxies /api to the local backend (vite.config.js).
+const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {

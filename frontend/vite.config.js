@@ -7,6 +7,11 @@ const isDemo = process.env.VITE_DEMO === "1";
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    // Local dev: the frontend calls same-origin /api (matching production on
+    // Vercel) and Vite forwards it to the local backend.
+    proxy: { "/api": "http://localhost:8787" },
+  },
   build: isDemo
     ? { rollupOptions: { output: { inlineDynamicImports: true, manualChunks: undefined } } }
     : {},

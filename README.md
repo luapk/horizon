@@ -135,6 +135,36 @@ estimate before you run it.
 `npm run smoke --workspace backend` runs the pipeline directly (no HTTP
 server) against mock providers only, for a fast plumbing check.
 
+## Deploying on Vercel
+
+The repo is wired for Vercel out of the box: the frontend deploys as a
+static build, and `api/index.ts` wraps the same Express app as a serverless
+function (`/api/*` is rewritten to it; scans keep running after the response
+via `waitUntil`, up to the function's `maxDuration` of 300s).
+
+1. **Import the repo** at vercel.com/new (or `vercel` CLI). No framework
+   preset needed -- `vercel.json` carries the build config.
+2. **First deploy works with zero env vars**: mock providers, starter
+   password `longview`, ephemeral `/tmp` SQLite. Good for kicking tires;
+   data does not survive between serverless instances.
+3. **For real use, set env vars** in the Vercel project:
+   - `SESSION_SECRET` -- long random string (required once API keys are set)
+   - `AUTH_PASSWORD_HASH` (bcrypt) or `AUTH_PASSWORD` -- required once API
+     keys are set; the `longview` default only applies in keyless mock mode
+   - `ANTHROPIC_API_KEY`, `TAVILY_API_KEY`, `VOYAGE_API_KEY` -- real pipeline
+   - `POSTGRES_URL` (or `DATABASE_URL`) -- attach the Neon integration from
+     the Vercel Storage tab; the storage layer switches from SQLite to
+     Postgres automatically
+   - optional: `MAX_SCAN_USD`, `MONTHLY_BUDGET_USD` spend caps
+4. **Auto-deploys**: once the GitHub repo is connected in Vercel, every push
+   to `main` deploys production; branches get preview URLs.
+
+Deep scans can run several minutes; if a scan exceeds the function ceiling
+it is surfaced as failed by a staleness guard rather than spinning forever.
+For sustained heavy use a small always-on host (Railway/Fly/Render) remains
+the more natural shape -- the same repo runs there via `npm run build &&
+npm run start --workspace backend`.
+
 ## What's still manual / out of scope for this pass
 
 - Scenario prose and driver synthesis are single-shot LLM calls with no
@@ -150,5 +180,6 @@ server) against mock providers only, for a fast plumbing check.
 - The matrix stage scores scenarios per business unit from titles/taglines
   only; it isn't yet cross-checked against underlying signals the way
   drivers and scenarios are.
-- Hosting assumes a single always-on server (SQLite + in-process scans).
-  Moving to serverless would require Postgres and an external job queue.
+- On serverless, scans run inside the request instance via `waitUntil`
+  rather than an external job queue -- fine at pilot scale, but a queue
+  (and per-stage checkpointing) is the right shape for heavy concurrent use.
