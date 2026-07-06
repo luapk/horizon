@@ -191,6 +191,13 @@ async function simulateScan(scan: ScanResult, brand: BrandConfig): Promise<void>
     signalIds: c.signalIds,
     clusterIds: [c.id],
   }));
+  // Cross-link drivers so the constellation shows shared-signal edges (a real
+  // 9-driver scan is far denser; this keeps the demo's 3 from looking isolated).
+  if (drivers.length === 3 && signals.length >= 3) {
+    drivers[0].signalIds = [...drivers[0].signalIds, signals[1].id];
+    drivers[1].signalIds = [...drivers[1].signalIds, signals[2].id];
+    drivers[2].signalIds = [...drivers[2].signalIds, signals[0].id];
+  }
 
   push("driver_synthesis", "done", `${drivers.length} drivers synthesized (simulated)`);
   push("scenario_generation", "in_progress");

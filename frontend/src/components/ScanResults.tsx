@@ -2,12 +2,18 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { BrandConfig, ScanResult, Signal } from "@horizon/shared";
 import { T, FONT, eyebrow, display, STEEP_COLORS, STEEP_LABELS, TIER_COLORS, LANE_COLORS } from "../theme.js";
 import { api } from "../api.js";
-import { Globe } from "./Globe.js";
+import { Globe, type Arc } from "./Globe.js";
 import { AnimatedNumber } from "./AnimatedNumber.js";
+import { ScenarioField } from "./ScenarioField.js";
+import { DriverConstellation } from "./DriverConstellation.js";
+import { StoryMode } from "./StoryMode.js";
+import { CommandPalette, type Nav } from "./CommandPalette.js";
 import { executiveSummary } from "../lib/scanSummary.js";
 import { downloadScanPpt } from "../lib/exportPpt.js";
+import { resolveGeo } from "../geo.js";
+import { useIsNarrow } from "../hooks.js";
 
-const NAV = ["Overview", "Signals", "Drivers", "Scenarios", "Strategy", "Timeline"] as const;
+const NAV = ["Overview", "Signals", "Drivers", "Scenarios", "Strategy", "Timeline", "Story"] as const;
 type View = (typeof NAV)[number];
 
 const STAGE_LABELS: Record<string, string> = {
@@ -114,7 +120,15 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
   const [selectedScenario, setSelectedScenario] = useState<number | null>(null);
   const [filter, setFilter] = useState("All");
   const [exporting, setExporting] = useState(false);
+  const [focusGeo, setFocusGeo] = useState<{ lat: number; lng: number } | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
+  const narrow = useIsNarrow();
+
+  const goTo = (n: Nav) => {
+    setView(n.view as View);
+    if (n.scenarioId != null) setSelectedScenario(n.scenarioId);
+    if (n.filter) setFilter(n.filter);
+  };
 
   // Selecting a scenario opens a full dispatch below the card grid; on tall
   // grids that lands off-screen, so bring it into view (accounting for the
@@ -233,7 +247,7 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
               {executiveSummary(scan, brandName)}
             </p>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: narrow ? "repeat(3, 1fr)" : "repeat(6, 1fr)", gap: 14 }}>
             {[
               { label: "Signals", value: scan.signals.length, color: T.blue },
               { label: "Absences", value: absenceCount, color: T.cyan },
@@ -251,7 +265,7 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
             ))}
           </div>
           <CostReconciliation scan={scan} />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "1fr 1fr", gap: 20 }}>
             <div className="glass" style={{ padding: 26, animation: "fadeUp 450ms 280ms both" }}>
               <div style={{ ...eyebrow(), marginBottom: 16 }}>DRIVERS AT A GLANCE</div>
               <div style={{ display: "grid", gap: 10 }}>
@@ -283,13 +297,13 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
       )}
 
       {view === "Signals" && (
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(400px, 5fr) 7fr", gap: 20, alignItems: "start" }}>
-          <div className="glass--strong" style={{ padding: "22px 22px 16px", position: "sticky", top: 84, animation: "fadeUp 400ms both" }}>
+        <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "minmax(400px, 5fr) 7fr", gap: 20, alignItems: "start" }}>
+          <div className="glass--strong" style={{ padding: "22px 22px 16px", position: narrow ? "static" : "sticky", top: 84, animation: "fadeUp 400ms both" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
               <span style={{ ...eyebrow() }}>SIGNAL ATLAS</span>
               <span style={{ fontFamily: FONT.mono, fontSize: 10, color: T.textMuted }}>{scan.signals.length} SIGNALS · DRAG TO ROTATE</span>
             </div>
-            <Globe signals={filteredSignals} size={430} />
+            <Globe signals={filteredSignals} size={narrow ? 320 : 430} arcs={buildArcs(scan)} focus={focusGeo} />
           </div>
 
           <div>
@@ -306,15 +320,23 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
                 </button>
               ))}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {filteredSignals.map((s, i) => <SignalCard key={s.id} s={s} index={i} />)}
+            <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "1fr 1fr", gap: 12 }}>
+              {filteredSignals.map((s, i) => (
+                <div key={s.id}
+                  onMouseEnter={() => { const g = resolveGeo(s.geo)[0]; if (g) setFocusGeo({ lat: g.lat, lng: g.lng }); }}
+                  onMouseLeave={() => setFocusGeo(null)}>
+                  <SignalCard s={s} index={i} />
+                </div>
+              ))}
             </div>
           </div>
         </div>
       )}
 
       {view === "Drivers" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div>
+        <DriverConstellation drivers={scan.drivers} />
+        <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "1fr 1fr", gap: 16 }}>
           {scan.drivers.map((d, i) => (
             <div key={d.id} className="glass lift" style={{ padding: 26, borderLeft: `3px solid ${STEEP_COLORS[d.steep] ?? T.textMuted}`, animation: `fadeUp 450ms ${i * 80}ms both` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -336,11 +358,13 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
             </div>
           ))}
         </div>
+        </div>
       )}
 
       {view === "Scenarios" && (
         <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+          <ScenarioField scenarios={scan.scenarios} selectedId={selectedScenario} onSelect={(id) => setSelectedScenario(selectedScenario === id ? null : id)} />
+          <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "repeat(3, 1fr)", gap: 14 }}>
             {scan.scenarios.map((s, i) => (
               <button key={s.id} className="glass lift" onClick={() => setSelectedScenario(selectedScenario === s.id ? null : s.id)}
                 style={{
@@ -494,8 +518,10 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
         </div>
       )}
 
+      {view === "Story" && <StoryMode scan={scan} brandName={brandName} onGo={goTo} />}
+
       {view === "Timeline" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
+        <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "repeat(3, 1fr)", gap: 18 }}>
           {(["now", "monitor", "prepare"] as const).map((lane, laneIdx) => {
             const items = scan.timeline.filter((t) => t.lane === lane);
             const captions = { now: "Evidence strong. Fund and build.", monitor: "Track the leading indicators.", prepare: "Scenario-dependent capabilities." };
@@ -520,6 +546,36 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
           })}
         </div>
       )}
+
+      <CommandPalette scan={scan} onGo={goTo} />
+      <div style={{ position: "fixed", right: 20, bottom: 18, zIndex: 60, ...eyebrow(T.textMuted, 9), pointerEvents: "none" }}>
+        ⌘K · JUMP TO ANYTHING
+      </div>
     </div>
   );
+}
+
+/** Great-circle links between the geographies a driver spans — the visible
+ * "these forces connect these places" layer on the globe. */
+function buildArcs(scan: ScanResult): Arc[] {
+  const byId = new Map(scan.signals.map((s) => [s.id, s]));
+  const arcs: Arc[] = [];
+  for (const d of scan.drivers) {
+    const pts: { lat: number; lng: number }[] = [];
+    const seen = new Set<string>();
+    for (const sid of d.signalIds) {
+      const sig = byId.get(sid);
+      if (!sig) continue;
+      const g = resolveGeo(sig.geo)[0];
+      if (!g) continue;
+      const key = `${g.lat},${g.lng}`;
+      if (seen.has(key)) continue;
+      seen.add(key); pts.push({ lat: g.lat, lng: g.lng });
+    }
+    const color = STEEP_COLORS[d.steep] ?? T.violet;
+    for (let i = 0; i < pts.length - 1 && arcs.length < 22; i++) {
+      arcs.push({ a: pts[i], b: pts[i + 1], color });
+    }
+  }
+  return arcs;
 }

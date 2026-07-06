@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { BrandConfig } from "@horizon/shared";
 import { T, FONT, ghostButtonStyle } from "./theme.js";
 import { api, IS_DEMO } from "./api.js";
+import { useIsNarrow } from "./hooks.js";
 import { LONGVIEW_LOGO } from "./logo.js";
 import { Login } from "./components/Login.js";
 import { BrandForm } from "./components/BrandForm.js";
@@ -16,6 +17,7 @@ export default function App() {
   const [brands, setBrands] = useState<BrandConfig[]>([]);
   const [activeScanId, setActiveScanId] = useState<string | null>(null);
   const [showBrandForm, setShowBrandForm] = useState(false);
+  const narrow = useIsNarrow();
 
   useEffect(() => {
     api.me().then(() => refreshBrands().then(() => setPage("app"))).catch(() => setPage("login"));
@@ -44,7 +46,7 @@ export default function App() {
         borderRadius: 0, borderLeft: "none", borderRight: "none", borderTop: "none",
         boxShadow: "0 12px 40px rgba(2, 4, 10, 0.35)",
       }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 60, padding: "0 32px", maxWidth: 1440, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 60, padding: narrow ? "0 16px" : "0 32px", maxWidth: 1440, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <button
               onClick={() => { setActiveScanId(null); setShowBrandForm(false); }}
@@ -53,8 +55,8 @@ export default function App() {
             >
               <img src={LONGVIEW_LOGO} alt="Longview" style={{ height: 26, width: "auto", display: "block" }} />
             </button>
-            <div style={{ width: 1, height: 20, background: T.glassBorder }} />
-            <span style={{ fontSize: 11, color: T.textMuted, letterSpacing: 0.3 }}>Multi-brand futures intelligence</span>
+            {!narrow && <div style={{ width: 1, height: 20, background: T.glassBorder }} />}
+            {!narrow && <span style={{ fontSize: 11, color: T.textMuted, letterSpacing: 0.3 }}>Multi-brand futures intelligence</span>}
             {IS_DEMO && (
               <span style={{ fontFamily: FONT.mono, fontSize: 9, letterSpacing: 1.5, color: T.cyan, border: `1px solid ${T.cyan}35`, borderRadius: 4, padding: "3px 8px" }}>
                 DEMO · SIMULATED DATA
@@ -71,7 +73,7 @@ export default function App() {
         </div>
       </header>
 
-      <main style={{ position: "relative", zIndex: 1, padding: "40px 32px 96px", maxWidth: 1440, margin: "0 auto" }}>
+      <main style={{ position: "relative", zIndex: 1, padding: narrow ? "24px 16px 80px" : "40px 32px 96px", maxWidth: 1440, margin: "0 auto" }}>
         {activeScanId ? (
           <ScanResults scanId={activeScanId} brands={brands} />
         ) : showBrandForm ? (

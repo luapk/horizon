@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { BrandConfig, CostEstimate, ScanScope } from "@horizon/shared";
 import { T, FONT, eyebrow, inputStyle, primaryButton } from "../theme.js";
 import { api } from "../api.js";
+import { useIsNarrow } from "../hooks.js";
 
 const DEFAULT_SCOPE: ScanScope = {
   sourceQueries: 20,
@@ -53,6 +54,7 @@ export function ScanLauncher({ brands, onScanStarted }: { brands: BrandConfig[];
 
   const maxHigh = estimate ? Math.max(...estimate.byStage.map((s) => s.highUsd), 0.0001) : 1;
   const brand = brands.find((b) => b.id === brandId);
+  const narrow = useIsNarrow();
 
   return (
     <div style={{ animation: "fadeUp 400ms ease" }}>
@@ -64,7 +66,7 @@ export function ScanLauncher({ brands, onScanStarted }: { brands: BrandConfig[];
         Scope the scan on the left; the projected cost answers on the right, before anything is spent.
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(340px, 7fr) minmax(300px, 5fr)", gap: 20, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "minmax(340px, 7fr) minmax(300px, 5fr)", gap: 20, alignItems: "start" }}>
         <div className="glass" style={{ padding: 32, display: "grid", gap: 24, animation: "fadeUp 450ms 60ms both" }}>
           <div>
             <label style={{ ...eyebrow(T.textSecondary), display: "block", marginBottom: 7 }}>Brand</label>
@@ -93,7 +95,7 @@ export function ScanLauncher({ brands, onScanStarted }: { brands: BrandConfig[];
           </div>
         </div>
 
-        <div className="glass--strong" style={{ padding: 28, position: "sticky", top: 84, animation: "fadeUp 450ms 140ms both" }}>
+        <div className="glass--strong" style={{ padding: 28, position: narrow ? "static" : "sticky", top: 84, animation: "fadeUp 450ms 140ms both" }}>
           <div style={{ ...eyebrow(), marginBottom: 18 }}>PROJECTED COST</div>
           {estimate ? (
             <>
