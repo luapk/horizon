@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
-import { waitUntil } from "@vercel/functions";
 import { BrandConfig, ScanScope, estimateScanCost, type ScanResult } from "@horizon/shared";
 import { requireAuth, verifyPassword, issueSessionCookie, clearSessionCookie } from "./auth.js";
 import { saveBrand, getBrand, listBrands, saveScan, getScan, listScans, storageBackend } from "./db.js";
@@ -111,6 +110,50 @@ async function withStaleGuard(scan: ScanResult): Promise<ScanResult> {
   return failed;
 }
 
+/** Runs the full pipeline for a claimed scan, persisting progress as it goes so
+ * GET /scans/:id reflects live status. Saves are read-modify-write against async
+ * storage, so serialize them -- otherwise a progress save that read the scan
+ * mid-flight can land after the final result save and clobber a terminal state.
+ * Returns the finished scan. */
+async function executeScan(id: string, brand: BrandConfig, scope: ScanScope): Promise<ScanResult> {
+  const providers = buildProviders();
+  const progress: { stage: string; status: string; detail?: string }[] = [];
+  let saveChain: Promise<unknown> = Promise.resolve();
+  const enqueueSave = (fn: () => Promise<unknown>) => {
+    saveChain = saveChain.then(fn, fn);
+    return saveChain;
+  };
+  console.log(`[scan ${id}] execute (scope: ${scope.sourceQueries}q x ${scope.docsPerQuery}d, ${scope.driverCount} drivers, ${scope.scenarioCount} scenarios)`);
+
+  let final: ScanResult;
+  try {
+    final = await runScan(id, brand, scope, providers, (stage, status, detail) => {
+      console.log(`[scan ${id}] ${stage}:${status}${detail ? ` -- ${detail}` : ""}`);
+      progress.push({ stage, status, detail });
+      void enqueueSave(async () => {
+        const current = await getScan(id);
+        if (current && current.status !== "completed" && current.status !== "failed") {
+          await saveScan({ ...current, status: "running", progress: progress as never });
+        }
+      });
+    });
+    console.log(`[scan ${id}] complete: ${final.status}, $${final.actualCostUsd?.toFixed(3)}`);
+    final = { ...final, progress: progress as never };
+  } catch (err) {
+    console.error(`[scan ${id}] pipeline error:`, err);
+    const current = await getScan(id);
+    final = {
+      ...(current ?? ({ id, brandId: brand.id } as ScanResult)),
+      status: "failed",
+      error: err instanceof Error ? err.message : String(err),
+      progress: progress as never,
+    };
+  }
+  await enqueueSave(() => saveScan(final));
+  await saveChain;
+  return final;
+}
+
 router.post("/scans", async (req, res) => {
   const brand = await getBrand(req.body?.brandId);
   if (!brand) { res.status(404).json({ error: "brand not found" }); return; }
@@ -119,9 +162,8 @@ router.post("/scans", async (req, res) => {
   const capViolation = await spendCapViolation(estimateScanCost(scope).highUsd);
   if (capViolation) { res.status(403).json({ error: capViolation }); return; }
 
-  const id = randomUUID();
   const pending: ScanResult = {
-    id,
+    id: randomUUID(),
     brandId: brand.id,
     status: "pending",
     createdAt: new Date().toISOString(),
@@ -138,37 +180,24 @@ router.post("/scans", async (req, res) => {
   };
   await saveScan(pending);
   res.status(202).json(pending);
+});
 
-  // Run the pipeline in the background, persisting progress as it goes so
-  // GET /scans/:id reflects live status. waitUntil keeps the serverless
-  // instance alive after the response; locally it is a no-op and the
-  // long-lived process carries the promise anyway.
-  const providers = buildProviders();
-  const progress: { stage: string; status: string; detail?: string }[] = [];
-  // Saves are read-modify-write against async storage, so serialize them —
-  // otherwise a progress save that read the scan mid-flight can land after
-  // the final result save and clobber "completed" back to "running".
-  let saveChain: Promise<unknown> = Promise.resolve();
-  const enqueueSave = (fn: () => Promise<unknown>) => {
-    saveChain = saveChain.then(fn, fn);
-    return saveChain;
-  };
-  const pipeline = runScan(id, brand, scope, providers, (stage, status, detail) => {
-    progress.push({ stage, status, detail });
-    void enqueueSave(async () => {
-      const current = await getScan(id);
-      if (current && current.status !== "completed" && current.status !== "failed") {
-        await saveScan({ ...current, status: "running", progress: progress as never });
-      }
-    });
-  })
-    .then((result) => enqueueSave(() => saveScan({ ...result, progress: progress as never })))
-    .catch((err) =>
-      enqueueSave(() =>
-        saveScan({ ...pending, status: "failed", error: err instanceof Error ? err.message : String(err), progress: progress as never })
-      )
-    );
-  waitUntil(pipeline.then(() => saveChain));
+/** Runs a pending scan's pipeline synchronously. The client fires this without
+ * awaiting and keeps the request open; an in-flight request is guaranteed to
+ * keep the serverless instance alive for the whole pipeline (up to the function
+ * maxDuration), which post-response waitUntil is not. Progress is read via the
+ * GET poll. Idempotent: a scan already past "pending" returns immediately. */
+router.post("/scans/:id/run", async (req, res) => {
+  const scan = await getScan(req.params.id);
+  if (!scan) { res.status(404).json({ error: "not found" }); return; }
+  if (scan.status !== "pending") { res.json({ ok: true, status: scan.status }); return; }
+  const brand = await getBrand(scan.brandId);
+  if (!brand) { res.status(404).json({ error: "brand not found" }); return; }
+
+  // Claim it so a duplicate /run (double-fire, retry) can't start a second pass.
+  await saveScan({ ...scan, status: "running" });
+  const final = await executeScan(scan.id, brand, scan.scope);
+  res.json({ ok: true, status: final.status });
 });
 
 router.get("/scans", async (req, res) => {

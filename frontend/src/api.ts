@@ -31,8 +31,14 @@ const httpApi = {
 
   estimateScan: (scope: Partial<ScanScope>) =>
     request<CostEstimate>("/scans/estimate", { method: "POST", body: JSON.stringify({ scope }) }),
-  startScan: (brandId: string, scope: Partial<ScanScope>) =>
-    request<ScanResult>("/scans", { method: "POST", body: JSON.stringify({ brandId, scope }) }),
+  startScan: async (brandId: string, scope: Partial<ScanScope>) => {
+    const scan = await request<ScanResult>("/scans", { method: "POST", body: JSON.stringify({ brandId, scope }) });
+    // Fire the runner and deliberately do NOT await it: the browser keeps this
+    // request open, which keeps the serverless function alive for the whole
+    // pipeline. Progress is read via polling getScan. Errors are surfaced there.
+    void request(`/scans/${scan.id}/run`, { method: "POST" }).catch(() => {});
+    return scan;
+  },
   getScan: (id: string) => request<ScanResult>(`/scans/${id}`),
   listScans: (brandId?: string) => request<ScanResult[]>(`/scans${brandId ? `?brandId=${brandId}` : ""}`),
 };
