@@ -327,6 +327,11 @@ export const demoApi = {
     void simulateScan(scan, brand);
     return scan;
   },
+  async runScan(_id: string): Promise<{ ok: true }> {
+    // Demo scans run inside startScan's simulated pipeline; the runner kick is
+    // a no-op here (kept for API-shape parity with the server).
+    return { ok: true };
+  },
   async getScan(id: string): Promise<ScanResult> {
     const scan = scans.get(id);
     if (!scan) throw new Error("not found");

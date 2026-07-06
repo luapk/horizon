@@ -20,6 +20,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+const httpRun = (id: string): Promise<unknown> =>
+  request<{ ok: true }>(`/scans/${id}/run`, { method: "POST" }).catch(() => {});
+
 const httpApi = {
   login: (password: string) => request<{ ok: true }>("/login", { method: "POST", body: JSON.stringify({ password }) }),
   logout: () => request<{ ok: true }>("/logout", { method: "POST" }),
@@ -36,9 +39,13 @@ const httpApi = {
     // Fire the runner and deliberately do NOT await it: the browser keeps this
     // request open, which keeps the serverless function alive for the whole
     // pipeline. Progress is read via polling getScan. Errors are surfaced there.
-    void request(`/scans/${scan.id}/run`, { method: "POST" }).catch(() => {});
+    void httpRun(scan.id);
     return scan;
   },
+  // Idempotent runner kick. The poll re-fires this while a scan is still
+  // "pending" so a dropped initial fire (or a scan orphaned by a redeploy)
+  // self-heals instead of hanging.
+  runScan: (id: string) => httpRun(id),
   getScan: (id: string) => request<ScanResult>(`/scans/${id}`),
   listScans: (brandId?: string) => request<ScanResult[]>(`/scans${brandId ? `?brandId=${brandId}` : ""}`),
 };

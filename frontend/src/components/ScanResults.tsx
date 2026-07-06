@@ -122,6 +122,10 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
       const s = await api.getScan(scanId);
       if (cancelled) return;
       setScan(s);
+      // Self-heal: a scan still "pending" was never claimed by its runner
+      // (dropped fetch, or orphaned by a redeploy). Re-fire the idempotent
+      // runner so it starts instead of hanging.
+      if (s.status === "pending") void api.runScan(scanId);
       if (s.status === "pending" || s.status === "running") setTimeout(poll, 1200);
     };
     poll();

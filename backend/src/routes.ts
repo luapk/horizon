@@ -99,7 +99,10 @@ async function spendCapViolation(estimateHighUsd: number): Promise<string | null
 /** On serverless a scan orphaned by a killed instance would show "running"
  * forever (there is no boot sweep). Anything unfinished past the platform's
  * max function duration cannot still be alive — surface it as failed. */
-const STALE_SCAN_MS = 20 * 60 * 1000;
+// Just above the serverless function ceiling (maxDuration 300s): a scan still
+// unfinished past this can't have a live runner holding it, so surface it as
+// failed rather than letting the client poll a dead scan indefinitely.
+const STALE_SCAN_MS = 6 * 60 * 1000;
 async function withStaleGuard(scan: ScanResult): Promise<ScanResult> {
   const stale =
     (scan.status === "pending" || scan.status === "running") &&
