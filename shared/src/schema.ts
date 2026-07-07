@@ -180,5 +180,10 @@ export const ScanResult = z.object({
   matrix: z.array(MatrixRow).default([]),
   timeline: z.array(TimelineItem).default([]),
   error: z.string().optional(),
+  /** Server-side resumable-pipeline state (intermediate docs/signals, next
+   * stage, step lock). Never sent to clients -- stripped in the API layer. */
+  checkpoint: z.unknown().optional(),
+  /** When the pipeline last advanced a step; drives staleness detection. */
+  lastStepAt: z.string().optional(),
 });
 export type ScanResult = z.infer<typeof ScanResult>;

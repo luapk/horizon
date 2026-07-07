@@ -144,8 +144,15 @@ server) against mock providers only, for a fast plumbing check.
 
 The repo is wired for Vercel out of the box: the frontend deploys as a
 static build, and `api/index.ts` wraps the same Express app as a serverless
-function (`/api/*` is rewritten to it; scans keep running after the response
-via `waitUntil`, up to the function's `maxDuration` of 300s).
+function (`/api/*` is rewritten to it).
+
+**Scans run as a resumable step pipeline.** There is no background job:
+`POST /scans/:id/step` advances the pipeline by exactly one bounded stage
+(ingest, extract, analyze, drivers, a batch of scenarios, matrix) and
+persists a checkpoint; the open scan page calls it in a loop until done.
+Each step finishes well inside the function's `maxDuration`, an interrupted
+scan resumes from its checkpoint instead of losing paid work, and a scan
+nobody resumes for 10 minutes is surfaced as failed by a staleness guard.
 
 1. **Import the repo** at vercel.com/new (or `vercel` CLI). No framework
    preset needed -- `vercel.json` carries the build config.
@@ -168,11 +175,12 @@ via `waitUntil`, up to the function's `maxDuration` of 300s).
 4. **Auto-deploys**: once the GitHub repo is connected in Vercel, every push
    to `main` deploys production; branches get preview URLs.
 
-Deep scans can run several minutes; if a scan exceeds the function ceiling
-it is surfaced as failed by a staleness guard rather than spinning forever.
-For sustained heavy use a small always-on host (Railway/Fly/Render) remains
-the more natural shape -- the same repo runs there via `npm run build &&
-npm run start --workspace backend`.
+Because each step is short, even Deep-tier scans have no total-duration
+ceiling -- the scan takes as many steps as it takes, as long as the scan
+page stays open to drive them. For sustained heavy or fully unattended use,
+a small always-on host (Railway/Fly/Render) remains a natural alternative --
+the same repo runs there via `npm run build && npm run start --workspace
+backend`.
 
 ## What's still manual / out of scope for this pass
 

@@ -327,10 +327,13 @@ export const demoApi = {
     void simulateScan(scan, brand);
     return scan;
   },
-  async runScan(_id: string): Promise<{ ok: true }> {
-    // Demo scans run inside startScan's simulated pipeline; the runner kick is
-    // a no-op here (kept for API-shape parity with the server).
-    return { ok: true };
+  async stepScan(id: string): Promise<{ done: boolean; busy?: boolean; status: string }> {
+    // Demo scans advance themselves inside startScan's simulated pipeline; the
+    // step call just reports whether they're finished (API-shape parity).
+    const scan = scans.get(id);
+    if (!scan) throw new Error("not found");
+    const done = scan.status === "completed" || scan.status === "failed";
+    return { done, status: scan.status };
   },
   async getScan(id: string): Promise<ScanResult> {
     const scan = scans.get(id);

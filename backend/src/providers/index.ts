@@ -34,6 +34,12 @@ export function buildProviders(): Providers {
 export class UsageTracker {
   private events: UsageEvent[] = [];
 
+  /** Seed with prior events so a resumable pipeline accumulates cost across
+   * steps instead of resetting on every invocation. */
+  constructor(initial: UsageEvent[] = []) {
+    this.events = [...initial];
+  }
+
   recordSearch(stage: UsageEvent["stage"], calls: number) {
     this.events.push({ stage, provider: "search", calls, costUsd: searchCostUsd(calls), inputTokens: 0, outputTokens: 0 });
   }

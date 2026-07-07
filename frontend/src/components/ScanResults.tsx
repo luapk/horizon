@@ -116,20 +116,39 @@ export function ScanResults({ scanId, brands }: { scanId: string; brands: BrandC
     }
   }, [selectedScenario]);
 
+  // UI poll: refresh the scan record for live progress display.
   useEffect(() => {
     let cancelled = false;
     const poll = async () => {
       const s = await api.getScan(scanId);
       if (cancelled) return;
       setScan(s);
-      // Self-heal: a scan still "pending" was never claimed by its runner
-      // (dropped fetch, or orphaned by a redeploy). Re-fire the idempotent
-      // runner so it starts instead of hanging.
-      if (s.status === "pending") void api.runScan(scanId);
       if (s.status === "pending" || s.status === "running") setTimeout(poll, 1200);
     };
     poll();
     return () => { cancelled = true; };
+  }, [scanId]);
+
+  // Pipeline driver: this page advances the scan itself, one bounded step per
+  // call, until it's terminal. No background job to orphan; a reopened or
+  // interrupted scan simply resumes from its checkpoint. Errors and busy
+  // signals (another tab stepping) back off and retry.
+  useEffect(() => {
+    let stopped = false;
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    (async () => {
+      while (!stopped) {
+        try {
+          const r = await api.stepScan(scanId);
+          if (stopped || r.done) break;
+          await sleep(r.busy ? 3000 : 300);
+        } catch {
+          if (stopped) break;
+          await sleep(2500);
+        }
+      }
+    })();
+    return () => { stopped = true; };
   }, [scanId]);
 
   const filteredSignals = useMemo(() => {

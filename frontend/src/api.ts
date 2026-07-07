@@ -20,8 +20,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-const httpRun = (id: string): Promise<unknown> =>
-  request<{ ok: true }>(`/scans/${id}/run`, { method: "POST" }).catch(() => {});
+export interface StepResult {
+  done: boolean;
+  busy?: boolean;
+  status: string;
+  error?: string;
+}
 
 const httpApi = {
   login: (password: string) => request<{ ok: true }>("/login", { method: "POST", body: JSON.stringify({ password }) }),
@@ -34,18 +38,12 @@ const httpApi = {
 
   estimateScan: (scope: Partial<ScanScope>) =>
     request<CostEstimate>("/scans/estimate", { method: "POST", body: JSON.stringify({ scope }) }),
-  startScan: async (brandId: string, scope: Partial<ScanScope>) => {
-    const scan = await request<ScanResult>("/scans", { method: "POST", body: JSON.stringify({ brandId, scope }) });
-    // Fire the runner and deliberately do NOT await it: the browser keeps this
-    // request open, which keeps the serverless function alive for the whole
-    // pipeline. Progress is read via polling getScan. Errors are surfaced there.
-    void httpRun(scan.id);
-    return scan;
-  },
-  // Idempotent runner kick. The poll re-fires this while a scan is still
-  // "pending" so a dropped initial fire (or a scan orphaned by a redeploy)
-  // self-heals instead of hanging.
-  runScan: (id: string) => httpRun(id),
+  startScan: (brandId: string, scope: Partial<ScanScope>) =>
+    request<ScanResult>("/scans", { method: "POST", body: JSON.stringify({ brandId, scope }) }),
+  // Advance the scan's pipeline by one bounded stage. The scan page loops this
+  // until done -- the polling page IS the pipeline driver, so there is no
+  // background job to orphan and reopening a scan resumes it.
+  stepScan: (id: string) => request<StepResult>(`/scans/${id}/step`, { method: "POST" }),
   getScan: (id: string) => request<ScanResult>(`/scans/${id}`),
   listScans: (brandId?: string) => request<ScanResult[]>(`/scans${brandId ? `?brandId=${brandId}` : ""}`),
 };

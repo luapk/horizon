@@ -58,7 +58,29 @@ export async function generateScenarios(
   providers: Providers,
   usage: UsageTracker
 ): Promise<Scenario[]> {
-  const tiers = assignTiers(count);
+  const { scenarios, failures } = await generateScenarioBatch(brand, drivers, signals, count, 0, count, providers, usage);
+  if (scenarios.length === 0 && failures > 0) {
+    throw new Error(`all ${failures} scenarios failed to generate`);
+  }
+  return scenarios.map((s, k) => ({ ...s, id: k + 1 }));
+}
+
+/** Generate scenarios for indices [fromIndex, toIndex) of a `totalCount`-sized
+ * plan. Tier assignment is computed over the full plan so batches from a
+ * resumable pipeline agree on which indices are Probable/Deep/Cassandra.
+ * Per-scenario failures are skipped (counted), never thrown -- the corpus and
+ * every other scenario have already been paid for. */
+export async function generateScenarioBatch(
+  brand: BrandConfig,
+  drivers: Driver[],
+  signals: Signal[],
+  totalCount: number,
+  fromIndex: number,
+  toIndex: number,
+  providers: Providers,
+  usage: UsageTracker
+): Promise<{ scenarios: Scenario[]; failures: number }> {
+  const tiers = assignTiers(totalCount);
   const signalsById = new Map(signals.map((s) => [s.id, s]));
 
   // Each scenario is an independent LLM call -- generate them concurrently so
@@ -119,21 +141,16 @@ export async function generateScenarios(
     };
   };
 
-  // A single malformed scenario must never fail the whole scan -- mapWith-
+  // A single malformed scenario must never fail the batch -- mapWith-
   // Concurrency collects failures instead of throwing, so the rest survive.
-  const { results, failures } = await mapWithConcurrency(
-    Array.from({ length: count }, (_, i) => i),
-    SCENARIO_CONCURRENCY,
-    (i) => buildOne(i)
-  );
+  const lo = Math.max(0, fromIndex);
+  const hi = Math.min(totalCount, toIndex);
+  const indices = Array.from({ length: Math.max(0, hi - lo) }, (_, k) => lo + k);
+  const { results, failures } = await mapWithConcurrency(indices, SCENARIO_CONCURRENCY, (i) => buildOne(i));
 
-  if (results.length === 0 && failures.length > 0) {
-    throw new Error(`all ${failures.length} scenarios failed to generate: ${failures[0].error}`);
-  }
-
-  // Restore the tier ordering (probable-first) that concurrency scrambles, then
-  // renumber ids 1..n so any dropped failures don't leave gaps.
-  return results
-    .sort((a, b) => a.index - b.index)
-    .map((r, k) => ({ ...r.scenario, id: k + 1 }));
+  // Restore the tier ordering (probable-first) that concurrency scrambles.
+  return {
+    scenarios: results.sort((a, b) => a.index - b.index).map((r) => r.scenario),
+    failures: failures.length,
+  };
 }

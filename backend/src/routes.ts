@@ -3,8 +3,7 @@ import { randomUUID } from "node:crypto";
 import { BrandConfig, ScanScope, estimateScanCost, type ScanResult } from "@horizon/shared";
 import { requireAuth, verifyPassword, issueSessionCookie, clearSessionCookie } from "./auth.js";
 import { saveBrand, getBrand, listBrands, saveScan, getScan, listScans, storageBackend } from "./db.js";
-import { buildProviders } from "./providers/index.js";
-import { runScan } from "./pipeline/run.js";
+import { advanceScan } from "./pipeline/steps.js";
 
 export const router = Router();
 
@@ -96,65 +95,97 @@ async function spendCapViolation(estimateHighUsd: number): Promise<string | null
   return null;
 }
 
-/** On serverless a scan orphaned by a killed instance would show "running"
- * forever (there is no boot sweep). Anything unfinished past the platform's
- * max function duration cannot still be alive — surface it as failed. */
-// Just above the serverless function ceiling (maxDuration 300s): a scan still
-// unfinished past this can't have a live runner holding it, so surface it as
-// failed rather than letting the client poll a dead scan indefinitely.
-const STALE_SCAN_MS = 6 * 60 * 1000;
-async function withStaleGuard(scan: ScanResult): Promise<ScanResult> {
-  const stale =
+/** Client-visible view of a scan: the resumable-pipeline checkpoint holds bulky
+ * intermediate state (raw docs, unclustered signals) and is server-internal. */
+function publicScan(scan: ScanResult): Omit<ScanResult, "checkpoint"> {
+  const { checkpoint: _checkpoint, ...rest } = scan;
+  return rest;
+}
+
+/** A scan whose pipeline hasn't advanced in this long has no live driver (the
+ * page that was stepping it is gone) -- surface it as failed rather than
+ * letting a client poll it indefinitely. Fresh activity is measured by
+ * lastStepAt, so a long scan that IS advancing never trips this. */
+const STALE_SCAN_MS = 10 * 60 * 1000;
+function isStale(scan: ScanResult): boolean {
+  const lastActivity = scan.lastStepAt ?? scan.createdAt;
+  return (
     (scan.status === "pending" || scan.status === "running") &&
-    Date.now() - new Date(scan.createdAt).getTime() > STALE_SCAN_MS;
-  if (!stale) return scan;
-  const failed: ScanResult = { ...scan, status: "failed", error: "scan timed out or was interrupted" };
+    Date.now() - new Date(lastActivity).getTime() > STALE_SCAN_MS
+  );
+}
+async function withStaleGuard(scan: ScanResult): Promise<ScanResult> {
+  if (!isStale(scan)) return scan;
+  const failed: ScanResult = { ...scan, status: "failed", error: "scan was interrupted (no pipeline activity for 10 minutes)", checkpoint: undefined };
   await saveScan(failed);
   return failed;
 }
 
-/** Runs the full pipeline for a claimed scan, persisting progress as it goes so
- * GET /scans/:id reflects live status. Saves are read-modify-write against async
- * storage, so serialize them -- otherwise a progress save that read the scan
- * mid-flight can land after the final result save and clobber a terminal state.
- * Returns the finished scan. */
-async function executeScan(id: string, brand: BrandConfig, scope: ScanScope): Promise<ScanResult> {
-  const providers = buildProviders();
-  const progress: { stage: string; status: string; detail?: string }[] = [];
-  let saveChain: Promise<unknown> = Promise.resolve();
-  const enqueueSave = (fn: () => Promise<unknown>) => {
-    saveChain = saveChain.then(fn, fn);
-    return saveChain;
-  };
-  console.log(`[scan ${id}] execute (scope: ${scope.sourceQueries}q x ${scope.docsPerQuery}d, ${scope.driverCount} drivers, ${scope.scenarioCount} scenarios)`);
+/** How long a step lock is honored before it's presumed dead and stolen. Must
+ * exceed the longest single stage under real providers. */
+const STEP_LOCK_MS = 150 * 1000;
 
-  let final: ScanResult;
-  try {
-    final = await runScan(id, brand, scope, providers, (stage, status, detail) => {
-      console.log(`[scan ${id}] ${stage}:${status}${detail ? ` -- ${detail}` : ""}`);
-      progress.push({ stage, status, detail });
-      void enqueueSave(async () => {
-        const current = await getScan(id);
-        if (current && current.status !== "completed" && current.status !== "failed") {
-          await saveScan({ ...current, status: "running", progress: progress as never });
-        }
-      });
-    });
-    console.log(`[scan ${id}] complete: ${final.status}, $${final.actualCostUsd?.toFixed(3)}`);
-    final = { ...final, progress: progress as never };
-  } catch (err) {
-    console.error(`[scan ${id}] pipeline error:`, err);
-    const current = await getScan(id);
-    final = {
-      ...(current ?? ({ id, brandId: brand.id } as ScanResult)),
-      status: "failed",
-      error: err instanceof Error ? err.message : String(err),
-      progress: progress as never,
-    };
+/** Advance a scan's pipeline by one bounded stage. Concurrency-safe via a
+ * claim-then-verify lock in the checkpoint; a competing step call gets
+ * {busy: true} instead of duplicating paid LLM work. Transient stage errors
+ * leave the scan resumable and only fail it after 3 consecutive failures. */
+async function stepOnce(id: string): Promise<{ status: number; body: Record<string, unknown> }> {
+  const scan = await getScan(id);
+  if (!scan) return { status: 404, body: { error: "not found" } };
+  if (scan.status === "completed" || scan.status === "failed") {
+    return { status: 200, body: { done: true, status: scan.status } };
   }
-  await enqueueSave(() => saveScan(final));
-  await saveChain;
-  return final;
+  if (isStale(scan)) {
+    const failed = await withStaleGuard(scan);
+    return { status: 200, body: { done: true, status: failed.status } };
+  }
+  const brand = await getBrand(scan.brandId);
+  if (!brand) return { status: 404, body: { error: "brand not found" } };
+
+  const cp = (scan.checkpoint ?? {}) as { lockedAt?: string; lockToken?: string; failuresInARow?: number; stage?: string };
+  if (cp.lockedAt && Date.now() - new Date(cp.lockedAt).getTime() < STEP_LOCK_MS) {
+    return { status: 200, body: { done: false, busy: true, status: scan.status } };
+  }
+
+  // Claim, then re-read to verify the claim stuck (best-effort guard against
+  // two instances claiming in the same instant).
+  const token = randomUUID();
+  await saveScan({
+    ...scan,
+    status: "running",
+    lastStepAt: new Date().toISOString(),
+    checkpoint: { stage: "ingest", ...cp, lockedAt: new Date().toISOString(), lockToken: token },
+  });
+  const claimed = await getScan(id);
+  const claimedCp = (claimed?.checkpoint ?? {}) as { lockToken?: string };
+  if (!claimed || claimedCp.lockToken !== token) {
+    return { status: 200, body: { done: false, busy: true, status: claimed?.status ?? "running" } };
+  }
+
+  try {
+    const { scan: next, done } = await advanceScan(claimed, brand);
+    // Clear the lock (and any failure streak) on the way out.
+    const nextCp = next.checkpoint as Record<string, unknown> | undefined;
+    const released: ScanResult = {
+      ...next,
+      checkpoint: done || !nextCp ? undefined : { ...nextCp, lockedAt: undefined, lockToken: undefined, failuresInARow: undefined },
+    };
+    await saveScan(released);
+    return { status: 200, body: { done, status: released.status } };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[scan ${id}] step error:`, message);
+    const failures = (cp.failuresInARow ?? 0) + 1;
+    const fatal = failures >= 3;
+    await saveScan({
+      ...claimed,
+      status: fatal ? "failed" : "running",
+      error: fatal ? message : undefined,
+      lastStepAt: new Date().toISOString(),
+      checkpoint: fatal ? undefined : { ...cp, failuresInARow: failures, lockedAt: undefined, lockToken: undefined },
+    });
+    return { status: 200, body: { done: fatal, status: fatal ? "failed" : "running", error: message } };
+  }
 }
 
 router.post("/scans", async (req, res) => {
@@ -182,34 +213,40 @@ router.post("/scans", async (req, res) => {
     timeline: [],
   };
   await saveScan(pending);
-  res.status(202).json(pending);
+  res.status(202).json(publicScan(pending));
 });
 
-/** Runs a pending scan's pipeline synchronously. The client fires this without
- * awaiting and keeps the request open; an in-flight request is guaranteed to
- * keep the serverless instance alive for the whole pipeline (up to the function
- * maxDuration), which post-response waitUntil is not. Progress is read via the
- * GET poll. Idempotent: a scan already past "pending" returns immediately. */
-router.post("/scans/:id/run", async (req, res) => {
-  const scan = await getScan(req.params.id);
-  if (!scan) { res.status(404).json({ error: "not found" }); return; }
-  if (scan.status !== "pending") { res.json({ ok: true, status: scan.status }); return; }
-  const brand = await getBrand(scan.brandId);
-  if (!brand) { res.status(404).json({ error: "brand not found" }); return; }
+/** Advance the scan's pipeline by exactly one bounded stage. The client's
+ * poll loop calls this repeatedly until {done: true} -- each call is short,
+ * so no request ever fights a serverless duration limit, and an interrupted
+ * scan resumes from its checkpoint on the next call. */
+router.post("/scans/:id/step", async (req, res) => {
+  const { status, body } = await stepOnce(req.params.id);
+  res.status(status).json(body);
+});
 
-  // Claim it so a duplicate /run (double-fire, retry) can't start a second pass.
-  await saveScan({ ...scan, status: "running" });
-  const final = await executeScan(scan.id, brand, scan.scope);
-  res.json({ ok: true, status: final.status });
+/** Back-compat for clients on an older bundle: run the pipeline to completion
+ * within this request by stepping until done. */
+router.post("/scans/:id/run", async (req, res) => {
+  let last: Record<string, unknown> = {};
+  for (let i = 0; i < 60; i++) {
+    const { status, body } = await stepOnce(req.params.id);
+    if (status !== 200) { res.status(status).json(body); return; }
+    last = body;
+    if (body.done) break;
+    if (body.busy) await new Promise((r) => setTimeout(r, 2000));
+  }
+  res.json({ ok: true, status: last.status ?? "running" });
 });
 
 router.get("/scans", async (req, res) => {
   const brandId = typeof req.query.brandId === "string" ? req.query.brandId : undefined;
-  res.json(await Promise.all((await listScans(brandId)).map(withStaleGuard)));
+  const scans = await Promise.all((await listScans(brandId)).map(withStaleGuard));
+  res.json(scans.map(publicScan));
 });
 
 router.get("/scans/:id", async (req, res) => {
   const scan = await getScan(req.params.id);
   if (!scan) { res.status(404).json({ error: "not found" }); return; }
-  res.json(await withStaleGuard(scan));
+  res.json(publicScan(await withStaleGuard(scan)));
 });

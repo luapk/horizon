@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction } from "express";
@@ -12,8 +11,14 @@ const COOKIE_NAME = "horizon_session";
  * ephemeral session secret (sessions reset on cold start). */
 const HAS_REAL_KEYS = Boolean(process.env.ANTHROPIC_API_KEY);
 
+// The keyless fallback secret is intentionally FIXED, not random: serverless
+// runs many instances, and a per-instance random secret means a session cookie
+// signed by one instance is rejected by every other -- requests fail
+// "session expired" at random. A public constant is fine here because keyless
+// mode is mock-only and its password ("longview") is public documentation
+// anyway; deployments with real API keys are required to set SESSION_SECRET.
 const SESSION_SECRET =
-  process.env.SESSION_SECRET ?? (HAS_REAL_KEYS ? undefined : randomBytes(32).toString("hex"));
+  process.env.SESSION_SECRET ?? (HAS_REAL_KEYS ? undefined : "longview-keyless-demo-secret");
 const AUTH_PASSWORD_HASH = process.env.AUTH_PASSWORD_HASH;
 const AUTH_PASSWORD = process.env.AUTH_PASSWORD ?? (HAS_REAL_KEYS ? undefined : "longview");
 
